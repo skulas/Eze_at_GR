@@ -11,7 +11,17 @@
 @import SmartDeviceLink_iOS;
 #import "GREventsGenerator.h"
 
-#warning TODO: Change these to match your app settings!!
+// Boot order
+typedef NS_OPTIONS(NSUInteger, GRBootSteps) {
+    GRBootNotStarted            = 0,
+    GRBootStepAppInterface      = 1 << 0,
+    GRBootStepHMIStatus         = 1 << 1
+};
+
+static const GRBootSteps kBootStatusReady = GRBootStepHMIStatus | GRBootStepAppInterface;
+static GRBootSteps bootStatus = GRBootNotStarted;
+
+
 // TCP/IP (Emulator) configuration
 static NSString *const RemotePort = @"12345";
 
@@ -22,6 +32,7 @@ static const BOOL AppIsMediaApp = NO;
 static NSString *const ShortAppName = @"GreenRoad";
 static NSString *const AppVrSynonym = @"Hello S D L";
 static NSString *const IconFile = @"green_road_logo"; // @"sdl_icon.png";
+static const NSUInteger AppIconIdInt = 0xA96A;
 
 static NSString *const PruebitaImgFilename = @"Pruebita";
 static NSUInteger const PruebitaImgId = 15894239;
@@ -32,12 +43,31 @@ static NSString *const WelcomeSpeak = @"Welcome to Green Road";
 static NSString *const TestCommandName = @"Test Command";
 static const NSUInteger TestCommandID = 1;
 
+// Begin Drive Command
+static NSString *const BeginDriveCommandName = @"Begin Drive";
+static const NSUInteger BeginDriveCommandID = 2;
+
+// Test Alert
+static const NSUInteger TestAlertButtonID = 0xB52;
+
+// Events
+static NSString *const imgEventAxl = @"event_axl";
+static NSString *const imgEventBreak = @"event_break";
+static NSString *const imgEventCornerRight = @"event_corner_right";
+static NSString *const imgEventCornerLeft = @"event_corner_left";
+static const int emptyImgId = 4321234;
+static const int axlImgId = 0xBADA55;
+static const int breakImgId = 0xBEAC5;
+static const int cornerLeftImgId = 0x7EF7;
+static const int cornerRightImgId = 0x17E1;
+
+
 // Notifications used to show/hide lockscreen in the AppDelegate
 NSString *const HSDLDisconnectNotification = @"com.sdl.notification.sdldisconnect";
 NSString *const HSDLLockScreenStatusNotification = @"com.sdl.notification.sdlchangeLockScreenStatus";
 NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdlnotificationObject";
 
-@interface HSDLProxyManager () <SDLProxyListener>
+@interface HSDLProxyManager () <SDLProxyListener, GREventsGeneratorDelegate>
 
 @property (nonatomic, strong) SDLProxy *proxy;
 @property (nonatomic, assign) NSUInteger correlationID;
@@ -48,6 +78,7 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
 @property (nonatomic, assign, getter=isFirstHmiNotNone) BOOL firstHmiNotNone;
 @property (nonatomic, assign, getter=isVehicleDataSubscribed) BOOL vehicleDataSubscribed;
 @property(nonatomic, strong) NSString *RemoteIpAddress;
+@property (nonatomic, strong) NSMutableArray *uploadsQueue;
 
 
 @end
@@ -79,6 +110,13 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
         _remoteImages = [[NSMutableSet alloc] init];
         _vehicleDataSubscribed = NO;
         
+        self.uploadsQueue = [NSMutableArray arrayWithArray:@[@[@(PruebitaImgId), PruebitaImgFilename],
+                                                             @[@(emptyImgId), @"emptyImg"],
+                                                             @[@(axlImgId), imgEventAxl],
+                                                             @[@(breakImgId), imgEventBreak],
+                                                             @[@(cornerLeftImgId), imgEventCornerLeft],
+                                                             @[@(cornerRightImgId), imgEventCornerRight]]];
+
         // Get IP from defaults
         NSString *ipStr = [[NSUserDefaults standardUserDefaults] stringForKey:@"IP_preference"];
         NSLog(@"IP is %@", ipStr);
@@ -87,9 +125,6 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
         } else {
             self.RemoteIpAddress = ipStr;
         }
-        
-        NSLog(@"START Events generator");
-        [[GREventsGenerator sharedInstance] start];
     }
     return self;
 }
@@ -192,14 +227,15 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
     if (self.isGraphicsSupported) {
         [self hsdl_uploadImages];
         
-        NSLog(@"Uploading Test Img");
-        [self hsdl_uploadImage:PruebitaImgFilename withCorrelationID:@(PruebitaImgId)];
-        
-        NSLog(@"uploading EMTPY Img");
-        [self hsdl_uploadImage:@"emptyImg" withCorrelationID:@(4321234)];
-        
-        NSLog(@"Uploading axl img");
-        [self hsdl_uploadImage:@"event_axl" withCorrelationID:@(0xBADA55)];
+        BOOL uploadImages = NO;
+        @synchronized (self) {
+            bootStatus |= GRBootStepAppInterface;
+            
+            uploadImages = (bootStatus == kBootStatusReady);
+        }
+        if (uploadImages) {
+            [self uploadImageFromQueue];
+        }
     }
 }
 
@@ -212,6 +248,7 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
     return [NSNumber numberWithUnsignedInteger:++self.correlationID];
 }
 
+
 #pragma mark HMI
 
 /**
@@ -222,22 +259,47 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
 
     // Send welcome message on first HMI FULL
     if ([[SDLHMILevel FULL] isEqualToEnum:notification.hmiLevel]) {
+        NSLog(@"HMIStatus = FULL");
+        
         if (self.isFirstHmiFull) {
             self.firstHmiFull = NO;
+            
             [self hsdl_performWelcomeMessage];
         }
+        
+        BOOL uploadImages = NO;
+        @synchronized (self) {
+            bootStatus |= GRBootStepHMIStatus;
+            
+            uploadImages = (bootStatus == kBootStatusReady);
+        }
+        if (uploadImages) {
+            [self uploadImageFromQueue];
+        }
+        
+
 
         // Other HMI (Show, PerformInteraction, etc.) would go here
     }
 
     // Send AddCommands in first non-HMI NONE state (i.e., FULL, LIMITED, BACKGROUND)
-    if (![[SDLHMILevel NONE] isEqualToEnum:notification.hmiLevel]) {
+    if ([[SDLHMILevel NONE] isEqualToEnum:notification.hmiLevel]) {
+        NSLog(@"HMIStatus = NONE");
+    } else {
         if (self.isFirstHmiNotNone) {
             self.firstHmiNotNone = NO;
             [self hsdl_addCommands];
 
             // Other app setup (SubMenu, CreateChoiceSet, etc.) would go here
         }
+    }
+    
+    if ([[SDLHMILevel BACKGROUND] isEqualToEnum:notification.hmiLevel]) {
+        NSLog(@"HMIStatus = Background");
+    }
+
+    if ([[SDLHMILevel LIMITED] isEqualToEnum:notification.hmiLevel]) {
+        NSLog(@"HMIStatus = Limited");
     }
 }
 
@@ -297,14 +359,58 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
     // Check the mutable set for the AppIcon
     // If not present, upload the image
     if (![self.remoteImages containsObject:IconFile]) {
-        self.appIconId = [self hsdl_getNextCorrelationId];
+        self.appIconId = @(AppIconIdInt);
         [self hsdl_uploadImage:IconFile withCorrelationID:self.appIconId];
     } else {
         // If the file is already present, send the SetAppIcon request
         [self hsdl_setAppIcon];
     }
-
+    
     // Other images (for Show, etc.) could be added here
+    
+
+    // DELETE FROM HERE
+//    NSLog(@"Uploading Test Img");
+//    //        [self hsdl_uploadImage:PruebitaImgFilename withCorrelationID:@(PruebitaImgId)];
+//    if ([self conditionalUpload:PruebitaImgFilename existingFiles:self.remoteImages correlationID:@(PruebitaImgId)]) {
+//        NSLog(@"uploading EMTPY Img");
+//        //    [self hsdl_uploadImage:@"emptyImg" withCorrelationID:@(4321234)];
+//        [self conditionalUpload:@"emptyImg" existingFiles:self.remoteImages correlationID:@(emptyImgId)];
+//        
+//        
+//        NSLog(@"Uploading events images");
+//        [self conditionalUpload:imgEventAxl existingFiles:self.remoteImages correlationID:@(axlImgId)];
+//        [self conditionalUpload:imgEventBreak existingFiles:self.remoteImages correlationID:@(breakImgId)];
+//        [self conditionalUpload:imgEventCornerLeft existingFiles:self.remoteImages correlationID:@(cornerLeftImgId)];
+//        [self conditionalUpload:imgEventCornerRight existingFiles:self.remoteImages correlationID:@(cornerRightImgId)];
+    // DELETE TO HERE
+
+    //    }
+}
+
+- (void) uploadImageFromQueue {
+    NSLog(@"Number of images pending download: %d", [self.uploadsQueue count]);
+    
+    if ([self.uploadsQueue count] > 0) {
+        NSArray *poped = [self.uploadsQueue lastObject];
+        
+        if (![self conditionalUpload: poped[1] existingFiles: self.remoteImages correlationID:poped[0]]) {
+            [self.uploadsQueue removeLastObject];
+            [self uploadImageFromQueue];
+        }
+    } else {
+        NSLog(@"Upload QUEUE depleted");
+    }
+}
+
+- (BOOL) conditionalUpload : (NSString*) imgName existingFiles : (NSMutableSet*) filesArray correlationID : (NSNumber*) corrId {
+    if (![filesArray containsObject:imgName]) {
+        NSLog(@"Image %@ not found, uploading it", imgName);
+        [self hsdl_uploadImage:imgName withCorrelationID:corrId];
+        return YES;
+    }
+    
+    return NO;
 }
 
 /**
@@ -332,6 +438,7 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
                 putFile.length = [NSNumber numberWithUnsignedLong:pngData.length];
                 putFile.bulkData = pngData;
                 putFile.correlationID = corrId;
+                
                 [self.proxy sendRPC:putFile];
             }
         }
@@ -359,12 +466,53 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
     NSLog(@"PutFile response from SDL: %@, correrlation ID: %@ with info: %@", response.resultCode, response.correlationID, response.info);
 
     // On success and matching app icon correlation ID, send a SetAppIcon request
-    if (response.success) {
+    if ([response.success intValue] == 1) {
+        int imgId = [response.correlationID intValue];
+        NSString *imgName = nil;
+        BOOL pop = YES;
+        
+        switch (imgId) {
+            case PruebitaImgId:
+                imgName = @"Pruebita";
+                break;
+            case axlImgId:
+                imgName = @"Acceleration event";
+                break;
+            case breakImgId:
+                imgName = @"Break event";
+                break;
+            case cornerRightImgId:
+                imgName = @"Corner Right event";
+                break;
+            case cornerLeftImgId:
+                imgName = @"Corner Left event";
+                break;
+            case emptyImgId:
+                imgName = @"EMPTY img";
+                break;
+            case AppIconIdInt:
+                imgName = @"App Icon";
+                pop = NO;
+                break;
+            default:
+                pop = NO;
+                break;
+        }
+        
+        NSLog(@"Image Uploaded (%d): %@", imgId, imgName);
         if ([response.correlationID isEqual:self.appIconId]) {
             [self hsdl_setAppIcon];
-        } else if ([response.correlationID isEqual:@(PruebitaImgId)]) {
-            NSLog(@"Pruebita Image uploaded successfully");
         }
+        
+        // Upload successfull, remove object from queue.
+        if (pop) {
+            [self.uploadsQueue removeLastObject];
+        }
+        [self uploadImageFromQueue];
+
+    } else {
+        NSArray *pop = [self.uploadsQueue lastObject];
+        NSLog(@"Failure uploading image %@, WAITING FOR HMISTATUS = FULL", pop[0]);
     }
 }
 
@@ -408,11 +556,11 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
     [self.proxy sendRPC:command];
     
     SDLMenuParams *menuParams2 = [[SDLMenuParams alloc] init];
-    menuParams2.menuName = @"Begin Trip";
+    menuParams2.menuName = BeginDriveCommandName;
     SDLAddCommand *command2 = [[SDLAddCommand alloc] init];
-    command2.vrCommands = [NSMutableArray arrayWithObject:@"Pruebita"];
+    command2.vrCommands = [NSMutableArray arrayWithObject:BeginDriveCommandName];
     command2.menuParams = menuParams2;
-    command2.cmdID = @(2);
+    command2.cmdID = @(BeginDriveCommandID);
     [self.proxy sendRPC:command2];
     
 }
@@ -440,7 +588,7 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
 
         SDLSpeak *speak = [SDLRPCRequestFactory buildSpeakWithTTS:@"Test Command" correlationID:[self hsdl_getNextCorrelationId]];
         [self.proxy sendRPC:speak];
-    } else {
+    } else if ([notification.cmdID isEqual:@(BeginDriveCommandID)]) {
         SDLImage *pruebitaImg = [[SDLImage alloc] init];
         pruebitaImg.value = PruebitaImgFilename;
         pruebitaImg.imageType = SDLImageType.DYNAMIC;
@@ -455,27 +603,27 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
         show.correlationID = [self hsdl_getNextCorrelationId];
         [self.proxy sendRPC:show];
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(4 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-            SDLShow *showBye = [[SDLShow alloc] init];
-            showBye.mainField1 = @"BYE";
-            showBye.mainField2 = @"";
-            showBye.statusBar = @"Bye Status Bar";
-            
-            NSLog(@"BYE BYE pruebita");
-            showBye.correlationID = [self hsdl_getNextCorrelationId];
-            [self.proxy sendRPC:showBye];
-            
-            // Try playing Pre recorded alert sounds
-//            SDLTTSChunk *simpleChunk = [[SDLTTSChunk alloc] init];
-//            simpleChunk = ttsText;
-//            simpleChunk.type = SDLSpeechCapabilities.PRE_RECORDED;
-//            NSArray *ttsChunks = [NSMutableArray arrayWithObject:simpleChunk];
-
-            
-            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(4 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+//            SDLShow *showBye = [[SDLShow alloc] init];
+//            showBye.mainField1 = @"BYE";
+//            showBye.mainField2 = @"";
+//            showBye.statusBar = @"Bye Status Bar";
+//            
+//            NSLog(@"BYE BYE pruebita");
+//            showBye.correlationID = [self hsdl_getNextCorrelationId];
+//            [self.proxy sendRPC:showBye];
+//            
+//            // Try playing Pre recorded alert sounds
+////            SDLTTSChunk *simpleChunk = [[SDLTTSChunk alloc] init];
+////            simpleChunk = ttsText;
+////            simpleChunk.type = SDLSpeechCapabilities.PRE_RECORDED;
+////            NSArray *ttsChunks = [NSMutableArray arrayWithObject:simpleChunk];
+//
+//            
+//            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(4 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
                 NSLog(@"BYE BYE pruebita");
-                [self clearDisplay];
                 [self testAlert];
-            });
+                [self clearDisplay];
+//            });
         });
         
         
@@ -494,8 +642,8 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
 
 - (void) testAlert {
     SDLAlert *testAlert = [[SDLAlert alloc] init];
-    testAlert.alertText1 = @"Driving Event";
-    testAlert.alertText2 = @"Acceleration";
+    testAlert.alertText1 = @"Driving Events";
+    testAlert.alertText2 = @"Starting driving events simulation.";
     testAlert.duration = @(3000);
     testAlert.ttsChunks = [NSMutableArray arrayWithObject:[SDLTTSChunkFactory buildTTSChunkForString:@"Acceleration" type:SDLSpeechCapabilities.TEXT]];
     testAlert.playTone = @(YES);
@@ -507,7 +655,7 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
     sftBtn.image = btnIng;
     sftBtn.type = SDLSoftButtonType.IMAGE;
     sftBtn.isHighlighted = @(NO);
-    sftBtn.softButtonID = @(0xB52);
+    sftBtn.softButtonID = @(TestAlertButtonID);
     testAlert.softButtons = [NSMutableArray arrayWithArray:@[sftBtn]];
     
     testAlert.correlationID = [self hsdl_getNextCorrelationId];
@@ -530,8 +678,69 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
     NSLog(@"Clearing display");
     showNothing.correlationID = [self hsdl_getNextCorrelationId];
     [self.proxy sendRPC:showNothing];
-    
 }
+
+
+#pragma mark GreenRoad events
+
+- (void) sendEventToSDLWithImage : (NSString*) imageName eventName : (NSString*) eventName {
+    SDLImage *pruebitaImg = [[SDLImage alloc] init];
+    pruebitaImg.value = imageName;
+    pruebitaImg.imageType = SDLImageType.DYNAMIC;
+    
+    SDLShow *show = [[SDLShow alloc] init];
+    show.mainField1 = eventName;
+    show.graphic = pruebitaImg;
+    show.statusBar = eventName;
+    show.alignment = [SDLTextAlignment CENTERED];
+    show.correlationID = [self hsdl_getNextCorrelationId];
+    [self.proxy sendRPC:show];
+
+
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        [self clearDisplay];
+    });
+    
+    SDLSpeak *speak = [SDLRPCRequestFactory buildSpeakWithTTS:eventName correlationID:[self hsdl_getNextCorrelationId]];
+    [self.proxy sendRPC:speak];
+}
+
+- (void) displayEvent : (GREventType) eventType {
+    NSString *eventName = nil;
+    NSString *imgName = nil;
+    
+    switch (eventType) {
+        case GREventAccelerate:
+            eventName = @"Acceleration";
+            imgName = imgEventAxl;
+            break;
+        case GREventBreak:
+            eventName = @"Break";
+            imgName = imgEventBreak;
+            break;
+        case GREventCornerRight:
+            eventName = @"Cornering right";
+            imgName = imgEventCornerRight;
+            break;
+        case GREventCornerLeft:
+            eventName = @"Cornering left";
+            imgName = imgEventCornerLeft;
+            break;
+        default:
+            NSLog(@"*** ERROR *** Event Not Recognized");
+            break;
+    }
+    
+    if (nil != eventName) {
+        NSLog(@"Displaying event: %@", eventName);
+        [self sendEventToSDLWithImage: imgName eventName:eventName];
+    }
+}
+
+- (void) driveEvent : (GREventsGenerator*) eventGenerator eventType:(GREventType) eventType {
+    [self displayEvent:eventType];
+}
+
 
 #pragma mark VehicleData
 
@@ -609,7 +818,12 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
 }
 
 - (void)onOnButtonEvent:(SDLOnButtonEvent *)notification {
-    NSLog(@"onButtonEvent notification from SDL");
+    NSLog(@"onOnButtonEvent: notification.from: %@", notification.customButtonID);
+    if ([notification.customButtonID isEqual:@(TestAlertButtonID)]) {
+        NSLog(@"START Events generator");
+        [[GREventsGenerator sharedInstance] setEventsListener:self];
+        [[GREventsGenerator sharedInstance] start];
+    }
 }
 
 - (void)onOnButtonPress:(SDLOnButtonPress *)notification {
