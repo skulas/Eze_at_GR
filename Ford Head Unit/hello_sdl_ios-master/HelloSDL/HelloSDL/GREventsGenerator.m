@@ -9,7 +9,7 @@
 #import "GREventsGenerator.h"
 
 static GREventsGenerator* _uniqueRef = nil;
-static const int MAX_RAND_PART = 30;
+static const int MAX_RAND_PART = 20;
 static const int MIN_INTERVAL_BETWEEN_EVENTS = 5;
 
 @interface GREventsGenerator()
@@ -63,23 +63,34 @@ static const int MIN_INTERVAL_BETWEEN_EVENTS = 5;
 
 - (void) generateRandomEvent {
     int eventType = arc4random_uniform(4);
+    GREventType grEventType = GREventNoEvent;
     
     switch (eventType) {
         case 0:
             NSLog(@"BREAK EVENT");
+            grEventType = GREventBreak;
             break;
         case 1:
             NSLog(@"AXLERATE EVENT");
+            grEventType = GREventAccelerate;
             break;
         case 2:
             NSLog(@"CORNER RIGHT EVENT");
+            grEventType = GREventCornerRight;
             break;
         case 3:
             NSLog(@"CORNER LEFT EVENT");
+            grEventType = GREventCornerLeft;
             break;
         default:
             NSLog(@"WFT EVENT - HOW DID WE GET VALUE ABOVE MAX RANDOM PARAM??");
             break;
+    }
+    
+    if (self.eventsListener && [self.eventsListener respondsToSelector:@selector(driveEvent:eventType:)]) {
+        [self.eventsListener driveEvent:self eventType:grEventType];
+    } else {
+        NSLog(@"Forgot to set self as eventsListener!!");
     }
     
     @synchronized (self) {
