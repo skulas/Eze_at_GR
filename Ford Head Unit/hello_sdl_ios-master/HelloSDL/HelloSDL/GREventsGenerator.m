@@ -39,16 +39,20 @@ static const int MIN_INTERVAL_BETWEEN_EVENTS = 5;
 }
 
 - (void) start {
-    @synchronized (self) {
-        if (self.running == NO) {
-            self.running = YES;
-            [self dispatchNewEvent];
+    if (self.running == NO) {
+        @synchronized (self) {
+            if (self.running == NO) {
+                NSLog(@"Start generating events");
+                self.running = YES;
+                [self dispatchNewEvent];
+            }
         }
     }
 }
 
 - (void) stop {
     @synchronized (self) {
+        NSLog(@"Stop generating events");
         self.running = NO;
     }
 }
@@ -68,7 +72,7 @@ static const int MIN_INTERVAL_BETWEEN_EVENTS = 5;
     switch (eventType) {
         case 0:
             NSLog(@"BREAK EVENT");
-            grEventType = GREventBreak;
+            grEventType = GREventBrake;
             break;
         case 1:
             NSLog(@"AXLERATE EVENT");

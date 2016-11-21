@@ -52,12 +52,12 @@ static const NSUInteger TestAlertButtonID = 0xB52;
 
 // Events
 static NSString *const imgEventAxl = @"event_axl";
-static NSString *const imgEventBreak = @"event_break";
+static NSString *const imgEventBrake = @"event_brake";
 static NSString *const imgEventCornerRight = @"event_corner_right";
 static NSString *const imgEventCornerLeft = @"event_corner_left";
 static const int emptyImgId = 4321234;
 static const int axlImgId = 0xBADA55;
-static const int breakImgId = 0xBEAC5;
+static const int brakeImgId = 0xBEAC5;
 static const int cornerLeftImgId = 0x7EF7;
 static const int cornerRightImgId = 0x17E1;
 
@@ -79,6 +79,8 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
 @property (nonatomic, assign, getter=isVehicleDataSubscribed) BOOL vehicleDataSubscribed;
 @property(nonatomic, strong) NSString *RemoteIpAddress;
 @property (nonatomic, strong) NSMutableArray *uploadsQueue;
+
+@property (nonatomic, strong) NSString *strTiresStatus;
 
 
 @end
@@ -113,7 +115,7 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
         self.uploadsQueue = [NSMutableArray arrayWithArray:@[@[@(PruebitaImgId), PruebitaImgFilename],
                                                              @[@(emptyImgId), @"emptyImg"],
                                                              @[@(axlImgId), imgEventAxl],
-                                                             @[@(breakImgId), imgEventBreak],
+                                                             @[@(brakeImgId), imgEventBrake],
                                                              @[@(cornerLeftImgId), imgEventCornerLeft],
                                                              @[@(cornerRightImgId), imgEventCornerRight]]];
 
@@ -267,6 +269,8 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
             [self hsdl_performWelcomeMessage];
         }
         
+        [self hsdl_subscribeVehicleData];
+        
         BOOL uploadImages = NO;
         @synchronized (self) {
             bootStatus |= GRBootStepHMIStatus;
@@ -380,7 +384,7 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
 //        
 //        NSLog(@"Uploading events images");
 //        [self conditionalUpload:imgEventAxl existingFiles:self.remoteImages correlationID:@(axlImgId)];
-//        [self conditionalUpload:imgEventBreak existingFiles:self.remoteImages correlationID:@(breakImgId)];
+//        [self conditionalUpload:imgEventBrake existingFiles:self.remoteImages correlationID:@(brakeImgId)];
 //        [self conditionalUpload:imgEventCornerLeft existingFiles:self.remoteImages correlationID:@(cornerLeftImgId)];
 //        [self conditionalUpload:imgEventCornerRight existingFiles:self.remoteImages correlationID:@(cornerRightImgId)];
     // DELETE TO HERE
@@ -389,7 +393,7 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
 }
 
 - (void) uploadImageFromQueue {
-    NSLog(@"Number of images pending download: %d", [self.uploadsQueue count]);
+    NSLog(@"Number of images pending download: %lu", (unsigned long)[self.uploadsQueue count]);
     
     if ([self.uploadsQueue count] > 0) {
         NSArray *poped = [self.uploadsQueue lastObject];
@@ -405,7 +409,7 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
 
 - (BOOL) conditionalUpload : (NSString*) imgName existingFiles : (NSMutableSet*) filesArray correlationID : (NSNumber*) corrId {
     if (![filesArray containsObject:imgName]) {
-        NSLog(@"Image %@ not found, uploading it", imgName);
+        NSLog(@"Image %@ (%@) not found, uploading it", imgName, corrId);
         [self hsdl_uploadImage:imgName withCorrelationID:corrId];
         return YES;
     }
@@ -478,8 +482,8 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
             case axlImgId:
                 imgName = @"Acceleration event";
                 break;
-            case breakImgId:
-                imgName = @"Break event";
+            case brakeImgId:
+                imgName = @"Brake event";
                 break;
             case cornerRightImgId:
                 imgName = @"Corner Right event";
@@ -535,7 +539,13 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
  */
 - (void)onOnLockScreenNotification:(SDLLockScreenStatus *)notification {
     NSLog(@"OnLockScreen notification from SDL");
-
+//    
+    SDLOnLockScreenStatus *lockScreenStatus = (SDLOnLockScreenStatus*)notification;
+    
+    if (notification && [lockScreenStatus.lockScreenStatus isEqualToEnum:[SDLLockScreenStatus OFF]]) {
+        [[GREventsGenerator sharedInstance] stop];
+    }
+    
     // Notify the app delegate
     [self hsdl_postNotification:HSDLLockScreenStatusNotification info:notification];
 }
@@ -668,7 +678,7 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
     showNothing.mainField1 = @"";
     showNothing.mainField2 = @"";
     showNothing.mainField3 = @"";
-    showNothing.mainField4 = @"";
+    showNothing.mainField4 = self.strTiresStatus;
     
     SDLImage *emptyImg = [[SDLImage alloc] init];
     emptyImg.value = @"emptyImg";
@@ -690,6 +700,7 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
     
     SDLShow *show = [[SDLShow alloc] init];
     show.mainField1 = eventName;
+    show.mainField4 = self.strTiresStatus;
     show.graphic = pruebitaImg;
     show.statusBar = eventName;
     show.alignment = [SDLTextAlignment CENTERED];
@@ -714,9 +725,9 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
             eventName = @"Acceleration";
             imgName = imgEventAxl;
             break;
-        case GREventBreak:
-            eventName = @"Break";
-            imgName = imgEventBreak;
+        case GREventBrake:
+            eventName = @"Brake";
+            imgName = imgEventBrake;
             break;
         case GREventCornerRight:
             eventName = @"Cornering right";
@@ -744,12 +755,12 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
 
 #pragma mark VehicleData
 
-// TODO: uncomment the methods below for vehicle data
+// vehicle data Area
 
 /**
  *  Delegate method that runs when the app's permissions change on SDL.
  */
-/*- (void)onOnPermissionsChange:(SDLOnPermissionsChange *)notification {
+- (void)onOnPermissionsChange:(SDLOnPermissionsChange *)notification {
     NSLog(@"OnPermissionsChange notification from SDL");
 
     // Check for permission to subscribe to vehicle data before sending the request
@@ -757,50 +768,92 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
     for (SDLPermissionItem *item in permissionArray) {
         if ([item.rpcName isEqualToString:@"SubscribeVehicleData"]) {
             if (item.hmiPermissions.allowed && item.hmiPermissions.allowed.count > 0) {
-                [self hsdl_subscribeVehicleData];
+                // Moved to other callback: [self hsdl_subscribeVehicleData];
             }
         }
     }
-}*/
+}
 
 /**
  *  Subscribe to (periodic) vehicle data updates from SDL.
  */
-/*- (void)hsdl_subscribeVehicleData {
+- (void)hsdl_subscribeVehicleData {
     NSLog(@"hsdl_subscribeVehicleData");
     if (!self.isVehicleDataSubscribed) {
         SDLSubscribeVehicleData *subscribe = [[SDLSubscribeVehicleData alloc] init];
         subscribe.correlationID = [self hsdl_getNextCorrelationId];
 
-#warning TODO: Add the vehicle data items you want to subscribe to
-        // Specify which items to subscribe to
         subscribe.speed = @YES;
+        subscribe.gps = @YES;
+        subscribe.tirePressure = @YES;
+//        subscribe.instantFuelConsumption = @YES;
+        subscribe.beltStatus = @YES;
+        subscribe.bodyInformation = @YES;
+        subscribe.deviceStatus = @YES;
+//        subscribe.airbagStatus = @YES;
+//        subscribe.emergencyEvent = @YES;
+//        subscribe.myKey = @YES;
+        
 
         [self.proxy sendRPC:subscribe];
     }
-}*/
+}
 
 /**
  *  Delegate method that runs when the subscribe vehicle data response is received from SDL.
  */
-/*- (void)onSubscribeVehicleDataResponse:(SDLSubscribeVehicleDataResponse *)response {
+- (void)onSubscribeVehicleDataResponse:(SDLSubscribeVehicleDataResponse *)response {
     NSLog(@"SubscribeVehicleData response from SDL: %@ with info: %@", response.resultCode, response.info);
 
     if (response && [[SDLResult SUCCESS] isEqualToEnum:response.resultCode]) {
         NSLog(@"Vehicle data subscribed!");
         self.vehicleDataSubscribed = YES;
     }
-}*/
+}
 
 /**
  *  Delegate method that runs when new vehicle data is received from SDL.
  */
-/*- (void)onOnVehicleData:(SDLOnVehicleData *)notification {
+- (void)onOnVehicleData:(SDLOnVehicleData *)notification {
     NSLog(@"OnVehicleData notification from SDL");
 
-#warning TODO: Put your vehicle data code here!
     NSLog(@"Speed: %@", notification.speed);
-}*/
+    NSLog(@"Tire Pressure left front: %@",notification.tirePressure.leftFront.status);
+    NSLog(@"Tire Pressure left rear: %@",notification.tirePressure.leftRear);
+    NSMutableString *badTires = [NSMutableString stringWithString:@""];
+    if (notification.tirePressure) {
+        if ([self tirePreasureIsBad:notification.tirePressure.leftFront]) {
+            [badTires appendString:@" Left Front"];
+        }
+        if ([self tirePreasureIsBad:notification.tirePressure.leftRear]) {
+            [badTires appendString:@" Left Rear"];
+        }
+        if ([self tirePreasureIsBad:notification.tirePressure.rightRear]) {
+            [badTires appendString:@" Right Rear"];
+        }
+        if ([self tirePreasureIsBad:notification.tirePressure.rightFront]) {
+            [badTires appendString:@" Right Front"];
+        }
+        
+        if (badTires.length > 1) {
+            self.strTiresStatus = [NSString stringWithFormat:@"Check your tires: %@", badTires];
+        } else {
+            self.strTiresStatus = @"";
+        }
+        [self clearDisplay];
+
+    }
+}
+
+- (BOOL) tirePreasureIsBad : (SDLSingleTireStatus*) tireStatus {
+    BOOL tireIsAreBad = NO;
+    
+    if (tireStatus) {
+        tireIsAreBad = [tireStatus.status isEqual:[SDLComponentVolumeStatus LOW]] || [tireStatus.status isEqual:[SDLComponentVolumeStatus ALERT]] || [tireStatus.status isEqual:[SDLComponentVolumeStatus FAULT]]; // Not sure fault is bad.
+    }
+    
+    return tireIsAreBad;
+}
 
 /*
  
