@@ -10,5 +10,7 @@
 
 @interface LockScreenViewController : UIViewController
 
+- (void) animateInWithCompletionBlock : (void (^)()) animationDone;
+- (void) animateOutWithCompletionBlock : (void (^)()) animatrionDone;
 @end
 

@@ -8,11 +8,12 @@
 
 #import "AppDelegate.h"
 #import "HSDLProxyManager.h"
+#import "LockScreenViewController.h"
 @import SmartDeviceLink_iOS;
 
 @interface AppDelegate ()
 
-@property UIViewController *lockScreenViewController;
+@property LockScreenViewController *lockScreenViewController;
 @property UIViewController *mainViewController;
 
 @end
@@ -24,7 +25,7 @@
     // Override point for customization after application launch.
     // Store references to the 2 view controllers
     UIStoryboard *sb = [UIStoryboard storyboardWithName:@"Main" bundle:nil];
-    UIViewController *lockvc = [sb instantiateViewControllerWithIdentifier:@"LockScreenViewController"];
+    LockScreenViewController *lockvc = (LockScreenViewController*)[sb instantiateViewControllerWithIdentifier:@"LockScreenViewController"];
     self.lockScreenViewController = lockvc;
     self.mainViewController = self.window.rootViewController;
 
@@ -63,6 +64,9 @@
         // Display the lock screen if it is not presented already.
         if ([self.window.rootViewController isEqual:self.lockScreenViewController] == NO) {
             [self.window setRootViewController:self.lockScreenViewController];
+            [self.lockScreenViewController animateInWithCompletionBlock:^{
+                NSLog(@"LOCKED");
+            }];
         }
     }
 }
@@ -71,7 +75,9 @@
     @synchronized(self) {
         // Display the regular screen if it is not presented already.
         if ([self.window.rootViewController isEqual:self.mainViewController] == NO) {
-            [self.window setRootViewController:self.mainViewController];
+            [self.lockScreenViewController animateOutWithCompletionBlock:^{
+                [self.window setRootViewController:self.mainViewController];
+            }];
         }
     }
 }
