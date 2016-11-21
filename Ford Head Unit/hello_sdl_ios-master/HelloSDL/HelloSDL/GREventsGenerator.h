@@ -10,7 +10,7 @@
 
 typedef NS_ENUM(NSUInteger, GREventType) {
     GREventNoEvent,
-    GREventBreak,
+    GREventBrake,
     GREventAccelerate,
     GREventCornerRight,
     GREventCornerLeft
@@ -30,5 +30,6 @@ typedef NS_ENUM(NSUInteger, GREventType) {
 
 + (GREventsGenerator*) sharedInstance;
 - (void) start;
+- (void) stop;
 
 @end
