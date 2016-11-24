@@ -763,7 +763,7 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
             imgName = imgEventCornerLeft;
             break;
         case GREventUIShowScore:
-            eventName = @"Doing well.	";
+            eventName = @"Doing well.";
             imgName = nil;
             break;
         default:
