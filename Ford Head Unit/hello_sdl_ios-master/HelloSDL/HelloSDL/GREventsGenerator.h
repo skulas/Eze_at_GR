@@ -13,7 +13,8 @@ typedef NS_ENUM(NSUInteger, GREventType) {
     GREventBrake,
     GREventAccelerate,
     GREventCornerRight,
-    GREventCornerLeft
+    GREventCornerLeft,
+    GREventUIShowScore
 };
 
 @class GREventsGenerator;

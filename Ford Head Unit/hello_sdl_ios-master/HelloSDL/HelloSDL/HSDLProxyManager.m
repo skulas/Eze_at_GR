@@ -60,6 +60,7 @@ static const int axlImgId = 0xBADA55;
 static const int brakeImgId = 0xBEAC5;
 static const int cornerLeftImgId = 0x7EF7;
 static const int cornerRightImgId = 0x17E1;
+static const int scoreButtonId = 0xB077;
 
 
 // Notifications used to show/hide lockscreen in the AppDelegate
@@ -663,7 +664,7 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
     btnIng.value = @"event_axl";
     btnIng.imageType = SDLImageType.DYNAMIC;
     sftBtn.image = btnIng;
-    sftBtn.type = SDLSoftButtonType.IMAGE;
+    sftBtn.type = [SDLSoftButtonType IMAGE];
     sftBtn.isHighlighted = @(NO);
     sftBtn.softButtonID = @(TestAlertButtonID);
     testAlert.softButtons = [NSMutableArray arrayWithArray:@[sftBtn]];
@@ -680,6 +681,8 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
     showNothing.mainField3 = @"";
     showNothing.mainField4 = self.strTiresStatus;
     
+//    [self addStandardButtonsToShow:showNothing];
+    
     SDLImage *emptyImg = [[SDLImage alloc] init];
     emptyImg.value = @"emptyImg";
     emptyImg.imageType = SDLImageType.DYNAMIC;
@@ -690,18 +693,40 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
     [self.proxy sendRPC:showNothing];
 }
 
+- (void) addStandardButtonsToShow : (SDLShow*) show {
+    NSString *strScore = @"Score";
+    
+    SDLSoftButton *softButton = [[SDLSoftButton alloc] init];
+    softButton.text = strScore;
+    softButton.type = [SDLSoftButtonType TEXT];
+    softButton.isHighlighted = @(NO);
+    softButton.softButtonID = @(scoreButtonId);
+    
+    show.softButtons = [NSMutableArray arrayWithArray:@[softButton]];
+    
+    // No need to subscribe UI buttons (AFAI see)
+//    SDLSubscribeButton *subscribe = [[SDLSubscribeButton alloc] init];
+//    subscribe.correlationID = [self hsdl_getNextCorrelationId];
+//    subscribe.buttonName = [SDLButtonName CUSTOM_BUTTON];
+    
+//    [self.proxy sendRPC:subscribe];
+}
+
 
 #pragma mark GreenRoad events
 
 - (void) sendEventToSDLWithImage : (NSString*) imageName eventName : (NSString*) eventName {
-    SDLImage *pruebitaImg = [[SDLImage alloc] init];
-    pruebitaImg.value = imageName;
-    pruebitaImg.imageType = SDLImageType.DYNAMIC;
-    
     SDLShow *show = [[SDLShow alloc] init];
+
+    if (nil != imageName) {
+        SDLImage *pruebitaImg = [[SDLImage alloc] init];
+        pruebitaImg.value = imageName;
+        pruebitaImg.imageType = SDLImageType.DYNAMIC;
+        show.graphic = pruebitaImg;
+    }
+    
     show.mainField1 = eventName;
     show.mainField4 = self.strTiresStatus;
-    show.graphic = pruebitaImg;
     show.statusBar = eventName;
     show.alignment = [SDLTextAlignment CENTERED];
     show.correlationID = [self hsdl_getNextCorrelationId];
@@ -736,6 +761,10 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
         case GREventCornerLeft:
             eventName = @"Cornering left";
             imgName = imgEventCornerLeft;
+            break;
+        case GREventUIShowScore:
+            eventName = @"Doing well.	";
+            imgName = nil;
             break;
         default:
             NSLog(@"*** ERROR *** Event Not Recognized");
@@ -871,11 +900,29 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
 }
 
 - (void)onOnButtonEvent:(SDLOnButtonEvent *)notification {
-    NSLog(@"onOnButtonEvent: notification.from: %@", notification.customButtonID);
-    if ([notification.customButtonID isEqual:@(TestAlertButtonID)]) {
-        NSLog(@"START Events generator");
-        [[GREventsGenerator sharedInstance] setEventsListener:self];
-        [[GREventsGenerator sharedInstance] start];
+    NSNumber *customButtonID = notification.customButtonID;
+    int customButtonIDInt = [customButtonID intValue];
+    
+    NSLog(@"onOnButtonEvent: notification.from: %@", customButtonID);
+    
+    switch (customButtonIDInt) {
+        case TestAlertButtonID: {
+            NSLog(@"START Events generator");
+            SDLShow *buttons = [[SDLShow alloc] init];
+            [self addStandardButtonsToShow:buttons];
+            [self.proxy sendRPC:buttons];
+            
+            [[GREventsGenerator sharedInstance] setEventsListener:self];
+            [[GREventsGenerator sharedInstance] start];
+        }
+            break;
+        case scoreButtonId:
+            NSLog(@"Showing Driver Score");
+            [self displayEvent:GREventUIShowScore];
+            
+            break;
+        default:
+            break;
     }
 }
 
