@@ -55,7 +55,7 @@
 static const NSTimeInterval accelerometerMin = 0.01;
 static const NSTimeInterval UI_REFRESH_RATE = 0.75;
 
-// number of areas to split each of the 8 quadrants
+// number of areas to split each of the 4 quadrants
 // 2: 0<|x|<0.5 or 0.5<|x|<1
 static const double resolution = 2.0; // Use Natural numbers. Using double for performance
 //static const int avgWindowSize = 20;
