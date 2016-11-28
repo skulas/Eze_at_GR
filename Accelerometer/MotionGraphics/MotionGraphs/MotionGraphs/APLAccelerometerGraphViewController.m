@@ -53,6 +53,7 @@
 #import <AudioToolbox/AudioToolbox.h>
 
 static const NSTimeInterval accelerometerMin = 0.01;
+static const NSTimeInterval UI_REFRESH_RATE = 0.75;
 
 // number of areas to split each of the 8 quadrants
 // 2: 0<|x|<0.5 or 0.5<|x|<1
@@ -110,6 +111,10 @@ static const double resolution = 2.0; // Use Natural numbers. Using double for p
 @property (nonatomic, assign) BOOL allDataVisible;
 @property (nonatomic, assign) BOOL graphEnabled;
 
+@property (nonatomic, strong) NSDate *dateLastUIRefresh;
+
+@property (nonatomic, strong) dispatch_queue_t calculations_queue;
+
 @end
 
 
@@ -119,7 +124,11 @@ static const double resolution = 2.0; // Use Natural numbers. Using double for p
 
 - (void) viewDidLoad {
     [super viewDidLoad];
+    
+    self.calculations_queue = dispatch_queue_create("com.gr.averages", DISPATCH_QUEUE_SERIAL);
+    
     sampleCounter = 0;
+    self.dateLastUIRefresh = [NSDate date];
     self.graphEnabled = YES;
     self.allDataVisible = !self.viewAllData.hidden;
     self.arr_xyoffsets = [NSMutableArray arrayWithCapacity:resolution*4];
@@ -128,6 +137,8 @@ static const double resolution = 2.0; // Use Natural numbers. Using double for p
     self.arr_xzCounters = [NSMutableArray arrayWithCapacity:resolution*4];
     self.arr_zyoffsets = [NSMutableArray arrayWithCapacity:resolution*4];
     self.arr_zyCounters = [NSMutableArray arrayWithCapacity:resolution*4];
+    
+    
     
     for (int ix = 0; ix < resolution*4; ix++) {
         self.arr_xyoffsets[ix] = [Point3D Zeroes];
@@ -156,10 +167,9 @@ static const double resolution = 2.0; // Use Natural numbers. Using double for p
         [mManager startAccelerometerUpdatesToQueue:[NSOperationQueue mainQueue] withHandler:^(CMAccelerometerData *accelerometerData, NSError *error) {
             if (self.graphEnabled) {
                 [weakSelf.graphView addX:accelerometerData.acceleration.x y:accelerometerData.acceleration.y z:accelerometerData.acceleration.z];
-                [weakSelf setLabelValueX:accelerometerData.acceleration.x y:accelerometerData.acceleration.y z:accelerometerData.acceleration.z];
             }
             
-            dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INTERACTIVE, 0), ^{
+            dispatch_async(self.calculations_queue, ^{
                 [weakSelf updateGWithX:accelerometerData.acceleration.x
                                      y:accelerometerData.acceleration.y
                                      z:accelerometerData.acceleration.z];
@@ -311,50 +321,57 @@ static const double resolution = 2.0; // Use Natural numbers. Using double for p
     
     
     
-    if (self.allDataVisible) {
-        int numOfGroups = resolution * 4;
-        NSMutableString *xyStr = [NSMutableString stringWithCapacity:200];
-        NSMutableString *yzStr = [NSMutableString stringWithCapacity:200];
-        NSMutableString *zxStr = [NSMutableString stringWithCapacity:200];
-        NSString *strFormat = @"\n%d\n%@=%.2f %@=%.2f\n";
-        
-        for (int txtIx = 0; txtIx < numOfGroups; txtIx++) {
-            int counterVal = [self.arr_xyCounters[txtIx] intValue];
-            Point3D *currSlice = self.arr_xyoffsets[txtIx];
-            NSString *currStr = [NSString stringWithFormat:strFormat, counterVal, @"x", currSlice.x, @"y", currSlice.y];
-            [xyStr appendString:currStr];
+    // UI Updates
+    if ([[NSDate date] timeIntervalSinceDate:self.dateLastUIRefresh] > UI_REFRESH_RATE) {
+        if (self.allDataVisible) {
+            int numOfGroups = resolution * 4;
+            NSMutableString *xyStr = [NSMutableString stringWithCapacity:200];
+            NSMutableString *yzStr = [NSMutableString stringWithCapacity:200];
+            NSMutableString *zxStr = [NSMutableString stringWithCapacity:200];
+            NSString *strFormat = @"\n%d\n%@=%.2f %@=%.2f\n";
+            
+            for (int txtIx = 0; txtIx < numOfGroups; txtIx++) {
+                int counterVal = [self.arr_xyCounters[txtIx] intValue];
+                Point3D *currSlice = self.arr_xyoffsets[txtIx];
+                NSString *currStr = [NSString stringWithFormat:strFormat, counterVal, @"x", currSlice.x, @"y", currSlice.y];
+                [xyStr appendString:currStr];
+                
+                counterVal = [self.arr_zyCounters[txtIx] intValue];
+                currSlice = self.arr_zyoffsets[txtIx];
+                currStr = [NSString stringWithFormat:strFormat, counterVal, @"y", currSlice.y, @"z", currSlice.z];
+                [yzStr appendString:currStr];
+                
+                counterVal = [self.arr_xzCounters[txtIx] intValue];
+                currSlice = self.arr_xzoffsets[txtIx];
+                currStr = [NSString stringWithFormat:strFormat, counterVal, @"z", currSlice.z, @"x", currSlice.x];
+                [zxStr appendString:currStr];
+            }
+            
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [self.lblAllDataXY setText:xyStr];
+                [self.lblAllDataYZ setText:yzStr];
+                [self.lblAllDataZX setText:zxStr];
+            });
+        } else {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [self setLabelValueX:x y:y z:z];
 
-            counterVal = [self.arr_zyCounters[txtIx] intValue];
-            currSlice = self.arr_zyoffsets[txtIx];
-            currStr = [NSString stringWithFormat:strFormat, counterVal, @"y", currSlice.y, @"z", currSlice.z];
-            [yzStr appendString:currStr];
-
-            counterVal = [self.arr_xzCounters[txtIx] intValue];
-            currSlice = self.arr_xzoffsets[txtIx];
-            currStr = [NSString stringWithFormat:strFormat, counterVal, @"z", currSlice.z, @"x", currSlice.x];
-            [zxStr appendString:currStr];
+                [self.lblXY_Quadrant setText:[NSString stringWithFormat:@"%.3f", oneX]];
+                [self.lblZX_Quadrant setText:[NSString stringWithFormat:@"%.3f", oneY]];
+                [self.lblYZ_Quadrant setText:[NSString stringWithFormat:@"%.3f", oneZ]];
+                
+                Point3D *pxy = self.arr_xyoffsets[xyQuadrant];
+                Point3D *pxz = self.arr_xzoffsets[zxQuadrant];
+                Point3D *pyz = self.arr_zyoffsets[yzQuadrant];
+                
+                [_lblDebug setText:[NSString stringWithFormat:@"Qxy %d, Qyz %d, Qzx %d\n(%.2f,%.2f) (%.2f,%.2f) (%.2f,%.2f)", xyQuadrant, yzQuadrant, zxQuadrant, pxy.x, pxy.y, pyz.y, pyz.z, pxz.z, pxz.x]];
+                
+                [self.lblGVec setText:[NSString stringWithFormat:@"%.3f", gVec]];
+                [self.lblGVecAvg setText:[NSString stringWithFormat:@"%.3f", avg]];
+            });
         }
         
-        dispatch_async(dispatch_get_main_queue(), ^{
-            [self.lblAllDataXY setText:xyStr];
-            [self.lblAllDataYZ setText:yzStr];
-            [self.lblAllDataZX setText:zxStr];
-        });
-    } else {
-        dispatch_async(dispatch_get_main_queue(), ^{
-            [self.lblXY_Quadrant setText:[NSString stringWithFormat:@"%.3f", oneX]];
-            [self.lblZX_Quadrant setText:[NSString stringWithFormat:@"%.3f", oneY]];
-            [self.lblYZ_Quadrant setText:[NSString stringWithFormat:@"%.3f", oneZ]];
-            
-            Point3D *pxy = self.arr_xyoffsets[xyQuadrant];
-            Point3D *pxz = self.arr_xzoffsets[zxQuadrant];
-            Point3D *pyz = self.arr_zyoffsets[yzQuadrant];
-            
-            [_lblDebug setText:[NSString stringWithFormat:@"Qxy %d, Qyz %d, Qzx %d\n(%.2f,%.2f) (%.2f,%.2f) (%.2f,%.2f)", xyQuadrant, yzQuadrant, zxQuadrant, pxy.x, pxy.y, pyz.y, pyz.z, pxz.z, pxz.x]];
-            
-            [self.lblGVec setText:[NSString stringWithFormat:@"%.3f", gVec]];
-            [self.lblGVecAvg setText:[NSString stringWithFormat:@"%.3f", avg]];
-        });
+        self.dateLastUIRefresh = [NSDate date];
     }
     
     
