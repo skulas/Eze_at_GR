@@ -96,8 +96,11 @@ static const double resolution = 2.0; // Use Natural numbers. Using double for p
 @property (weak, nonatomic) IBOutlet UILabel *lblDebug;
 
 @property (nonatomic, strong) NSMutableArray *arr_xyoffsets;
+@property (nonatomic, strong) NSMutableArray *arr_xyCounters;
 @property (nonatomic, strong) NSMutableArray *arr_xzoffsets;
+@property (nonatomic, strong) NSMutableArray *arr_xzCounters;
 @property (nonatomic, strong) NSMutableArray *arr_zyoffsets;
+@property (nonatomic, strong) NSMutableArray *arr_zyCounters;
 
 @end
 
@@ -110,12 +113,19 @@ static const double resolution = 2.0; // Use Natural numbers. Using double for p
     [super viewDidLoad];
     sampleCounter = 0;
     self.arr_xyoffsets = [NSMutableArray arrayWithCapacity:resolution*4];
+    self.arr_xyCounters = [NSMutableArray arrayWithCapacity:resolution*4];
     self.arr_xzoffsets = [NSMutableArray arrayWithCapacity:resolution*4];
+    self.arr_xzCounters = [NSMutableArray arrayWithCapacity:resolution*4];
     self.arr_zyoffsets = [NSMutableArray arrayWithCapacity:resolution*4];
+    self.arr_zyCounters = [NSMutableArray arrayWithCapacity:resolution*4];
+    
     for (int ix = 0; ix < resolution*4; ix++) {
         self.arr_xyoffsets[ix] = [Point3D Zeroes];
         self.arr_xzoffsets[ix] = [Point3D Zeroes];
         self.arr_zyoffsets[ix] = [Point3D Zeroes];
+        self.arr_xyCounters[ix] = @(0);
+        self.arr_xzCounters[ix] = @(0);
+        self.arr_zyCounters[ix] = @(0);
     }
 }
 
@@ -144,9 +154,9 @@ static const double resolution = 2.0; // Use Natural numbers. Using double for p
     self.updateIntervalLabel.text = [NSString stringWithFormat:@"%f", updateInterval];
 }
 
+
 // Build as averages for each segment of each quadrant separately.
 // Use infinite avg (the comment out) and not sliding windows.
-
 - (double) avgCalcNewValue:(double) newVal currentAvg: (double) currAvg numberOfsamples: (long) currSampleCounter {
     double result = (currAvg * currSampleCounter + newVal) / (currSampleCounter + 1);
     
@@ -154,32 +164,64 @@ static const double resolution = 2.0; // Use Natural numbers. Using double for p
 }
 
 
-//   1 - XY, 2 - XZ, 3 - ZY
+//   0 - XY, 1 - XZ, 2 - ZY
+/** Calculate three separate avg for newPoint values
+ * @param newPoint: NormGVec - UnitVec in the same direction (x,y,z)
+ * @param space: 0 - XY, 1 - ZX, 2 - YZ
+ * @param quadrantSliceIx: Which section of the spce (resolution * 4 sections. 4 as there are 4 quadrants (++, -+, -- , +-)
+ *
+ */
 - (void) updateAvgSpaceSelect : (int) space newPoint : (Point3D*) p3d quadrantSliceIx : (int) currSliceInQuadrant {
-    NSMutableArray *currArr = nil;
+    NSMutableArray *currOffsetArr = nil;
+    NSMutableArray *currCountersArr = nil;
+    Point3D *newVal = [Point3D Zeroes];
+    int currCounter;
     
     switch (space) {
         case 0:
-            currArr = self.arr_xyoffsets;
+        {
+            currOffsetArr = self.arr_xyoffsets;
+            currCountersArr = self.arr_xyCounters;
+            Point3D *currVal = currOffsetArr[currSliceInQuadrant];
+            currCounter = [currCountersArr[currSliceInQuadrant] intValue];
+            
+            newVal.x = [self avgCalcNewValue:p3d.x currentAvg:currVal.x numberOfsamples:currCounter];
+            newVal.y = [self avgCalcNewValue:p3d.y currentAvg:currVal.y numberOfsamples:currCounter];
+        }
+            
             break;
         case 1:
-            currArr = self.arr_xzoffsets;
+        {
+            currOffsetArr = self.arr_xzoffsets;
+            currCountersArr = self.arr_xzCounters;
+            Point3D *currVal = currOffsetArr[currSliceInQuadrant];
+            currCounter = [currCountersArr[currSliceInQuadrant] intValue];
+            
+            newVal.x = [self avgCalcNewValue:p3d.x currentAvg:currVal.x numberOfsamples:currCounter];
+            newVal.z = [self avgCalcNewValue:p3d.z currentAvg:currVal.z numberOfsamples:currCounter];
+        }
+            
             break;
         case 2:
-            currArr = self.arr_zyoffsets;
+        {
+            currOffsetArr = self.arr_zyoffsets;
+            currCountersArr = self.arr_zyCounters;
+            Point3D *currVal = currOffsetArr[currSliceInQuadrant];
+            currCounter = [currCountersArr[currSliceInQuadrant] intValue];
+
+            newVal.y = [self avgCalcNewValue:p3d.y currentAvg:currVal.y numberOfsamples:currCounter];
+            newVal.z = [self avgCalcNewValue:p3d.z currentAvg:currVal.z numberOfsamples:currCounter];
+        }
             break;
         default:
-            NSLog(@"WRONG SPACE: 1 - XY, 2 - XZ, 3 - ZY");
+            NSLog(@"WRONG SPACE: 0 - XY, 1 - XZ, 2 - ZY");
             return;
             break;
     }
-    Point3D *currVal = currArr[currSliceInQuadrant];
-    Point3D *newVal = [Point3D Zeroes];
-    newVal.x = [self avgCalcNewValue:p3d.x currentAvg:currVal.x numberOfsamples:sampleCounter];
-    newVal.y = [self avgCalcNewValue:p3d.y currentAvg:currVal.y numberOfsamples:sampleCounter];
-    newVal.z = [self avgCalcNewValue:p3d.z currentAvg:currVal.z numberOfsamples:sampleCounter];
     
-    self.arr_xyoffsets[currSliceInQuadrant] = newVal;
+    currCountersArr[currSliceInQuadrant] = @(currCounter + 1);
+    
+    currOffsetArr[currSliceInQuadrant] = newVal;
 }
 
 - (void) updateGWithX:(double)x y:(double)y z:(double)z {
@@ -189,6 +231,8 @@ static const double resolution = 2.0; // Use Natural numbers. Using double for p
 //    test += 1; // after many cycles the long will wrap around and the avg will be distorted a bit.
     
     double gVec = sqrt(pow(x, 2)+pow(y, 2)+pow(z, 2));
+    avg = [self avgCalcNewValue:gVec currentAvg:avg numberOfsamples:sampleCounter];
+
     double gVec_xy = sqrt(pow(x, 2)+pow(y, 2));
 //    double gVec_zx = sqrt(pow(x, 2)+pow(z, 2));
 //    double gVec_yz = sqrt(pow(y, 2)+pow(z, 2));
@@ -210,10 +254,6 @@ static const double resolution = 2.0; // Use Natural numbers. Using double for p
     }
     
     
-    //    avg = (avg * sampleCounter + gVec) / (sampleCounter + 1);
-    avg = [self avgCalcNewValue:gVec currentAvg:avg numberOfsamples:sampleCounter];
-    
-    
     
 //    [_lblDebug setText:[NSString stringWithFormat:@"z %.3f | rs %.3f", z, gVec*cos(phi)]];
     
@@ -230,19 +270,22 @@ static const double resolution = 2.0; // Use Natural numbers. Using double for p
     double oneY = sin_phi * sin(theta_xy);
     double oneZ = cos(phi);
     
-    Point3D *p3d = [[Point3D alloc] init];
-    p3d.x = oneX - x;
-    p3d.y = oneY - y;
-    p3d.z = oneZ - z;
+    Point3D *Unit_minus_actual = [[Point3D alloc] init];
+    Unit_minus_actual.x = oneX - x;
+    Unit_minus_actual.y = oneY - y;
+    Unit_minus_actual.z = oneZ - z;
+//    Unit_minus_actual.x = fabs(oneX - x);
+//    Unit_minus_actual.y = fabs(oneY - y);
+//    Unit_minus_actual.z = fabs(oneZ - z);
     
 //    Point3D *currVal = self.arr_xyoffsets[xyQuadrant];
 //    p3d.x = [self avgCalcNewValue:p3d.x currentAvg:currVal.x numberOfsamples:sampleCounter];
 //    p3d.y = [self avgCalcNewValue:p3d.y currentAvg:currVal.y numberOfsamples:sampleCounter];
 //    p3d.z = [self avgCalcNewValue:p3d.z currentAvg:currVal.z numberOfsamples:sampleCounter];
 //    self.arr_xyoffsets[xyQuadrant] = p3d;
-    [self updateAvgSpaceSelect:0 newPoint:p3d quadrantSliceIx:xyQuadrant];
-    [self updateAvgSpaceSelect:1 newPoint:p3d quadrantSliceIx:zxQuadrant];
-    [self updateAvgSpaceSelect:2 newPoint:p3d quadrantSliceIx:yzQuadrant];
+    [self updateAvgSpaceSelect:0 newPoint:Unit_minus_actual quadrantSliceIx:xyQuadrant];
+    [self updateAvgSpaceSelect:1 newPoint:Unit_minus_actual quadrantSliceIx:zxQuadrant];
+    [self updateAvgSpaceSelect:2 newPoint:Unit_minus_actual quadrantSliceIx:yzQuadrant];
     
 
 
@@ -254,7 +297,7 @@ static const double resolution = 2.0; // Use Natural numbers. Using double for p
     Point3D *pxz = self.arr_xzoffsets[zxQuadrant];
     Point3D *pyz = self.arr_zyoffsets[yzQuadrant];
     
-    [_lblDebug setText:[NSString stringWithFormat:@"Qxy %d, Qyz %d, Qzx %d\n%.3f %.3f %.3f %.3f %.3f %.3f", xyQuadrant, yzQuadrant, zxQuadrant, pxy.x, pxz.x, pxy.y, pyz.y, pxz.z, pyz.z]];
+    [_lblDebug setText:[NSString stringWithFormat:@"Qxy %d, Qyz %d, Qzx %d\n(%.2f,%.2f) (%.2f,%.2f) (%.2f,%.2f)", xyQuadrant, yzQuadrant, zxQuadrant, pxy.x, pxy.y, pyz.y, pyz.z, pxz.z, pxz.x]];
     
     
     
