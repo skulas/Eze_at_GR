@@ -87,6 +87,11 @@ static const double resolution = 2.0; // Use Natural numbers. Using double for p
 @interface APLAccelerometerGraphViewController ()
 
 @property (nonatomic, weak) IBOutlet APLGraphView *graphView;
+@property (weak, nonatomic) IBOutlet UIView *viewAllData;
+@property (weak, nonatomic) IBOutlet UILabel *lblAllDataXY;
+@property (weak, nonatomic) IBOutlet UILabel *lblAllDataYZ;
+@property (weak, nonatomic) IBOutlet UILabel *lblAllDataZX;
+
 @property (weak, nonatomic) IBOutlet UILabel *lblGVec;
 @property (weak, nonatomic) IBOutlet UILabel *lblGVecAvg;
 //@property (nonatomic, strong) NSMutableArray *arrWindow;
@@ -102,6 +107,9 @@ static const double resolution = 2.0; // Use Natural numbers. Using double for p
 @property (nonatomic, strong) NSMutableArray *arr_zyoffsets;
 @property (nonatomic, strong) NSMutableArray *arr_zyCounters;
 
+@property (nonatomic, assign) BOOL allDataVisible;
+@property (nonatomic, assign) BOOL graphEnabled;
+
 @end
 
 
@@ -112,6 +120,8 @@ static const double resolution = 2.0; // Use Natural numbers. Using double for p
 - (void) viewDidLoad {
     [super viewDidLoad];
     sampleCounter = 0;
+    self.graphEnabled = YES;
+    self.allDataVisible = !self.viewAllData.hidden;
     self.arr_xyoffsets = [NSMutableArray arrayWithCapacity:resolution*4];
     self.arr_xyCounters = [NSMutableArray arrayWithCapacity:resolution*4];
     self.arr_xzoffsets = [NSMutableArray arrayWithCapacity:resolution*4];
@@ -142,12 +152,18 @@ static const double resolution = 2.0; // Use Natural numbers. Using double for p
     APLAccelerometerGraphViewController * __weak weakSelf = self;
     if ([mManager isAccelerometerAvailable] == YES) {
         [mManager setAccelerometerUpdateInterval:updateInterval];
+        
         [mManager startAccelerometerUpdatesToQueue:[NSOperationQueue mainQueue] withHandler:^(CMAccelerometerData *accelerometerData, NSError *error) {
-            [weakSelf.graphView addX:accelerometerData.acceleration.x y:accelerometerData.acceleration.y z:accelerometerData.acceleration.z];
-            [weakSelf setLabelValueX:accelerometerData.acceleration.x y:accelerometerData.acceleration.y z:accelerometerData.acceleration.z];
-            [weakSelf updateGWithX:accelerometerData.acceleration.x
-                                 y:accelerometerData.acceleration.y
-                                 z:accelerometerData.acceleration.z];
+            if (self.graphEnabled) {
+                [weakSelf.graphView addX:accelerometerData.acceleration.x y:accelerometerData.acceleration.y z:accelerometerData.acceleration.z];
+                [weakSelf setLabelValueX:accelerometerData.acceleration.x y:accelerometerData.acceleration.y z:accelerometerData.acceleration.z];
+            }
+            
+            dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INTERACTIVE, 0), ^{
+                [weakSelf updateGWithX:accelerometerData.acceleration.x
+                                     y:accelerometerData.acceleration.y
+                                     z:accelerometerData.acceleration.z];
+            });
         }];
     }
 
@@ -175,7 +191,7 @@ static const double resolution = 2.0; // Use Natural numbers. Using double for p
     NSMutableArray *currOffsetArr = nil;
     NSMutableArray *currCountersArr = nil;
     Point3D *newVal = [Point3D Zeroes];
-    int currCounter;
+    long currCounter;
     
     switch (space) {
         case 0:
@@ -183,7 +199,7 @@ static const double resolution = 2.0; // Use Natural numbers. Using double for p
             currOffsetArr = self.arr_xyoffsets;
             currCountersArr = self.arr_xyCounters;
             Point3D *currVal = currOffsetArr[currSliceInQuadrant];
-            currCounter = [currCountersArr[currSliceInQuadrant] intValue];
+            currCounter = [currCountersArr[currSliceInQuadrant] longValue];
             
             newVal.x = [self avgCalcNewValue:p3d.x currentAvg:currVal.x numberOfsamples:currCounter];
             newVal.y = [self avgCalcNewValue:p3d.y currentAvg:currVal.y numberOfsamples:currCounter];
@@ -195,7 +211,7 @@ static const double resolution = 2.0; // Use Natural numbers. Using double for p
             currOffsetArr = self.arr_xzoffsets;
             currCountersArr = self.arr_xzCounters;
             Point3D *currVal = currOffsetArr[currSliceInQuadrant];
-            currCounter = [currCountersArr[currSliceInQuadrant] intValue];
+            currCounter = [currCountersArr[currSliceInQuadrant] longValue];
             
             newVal.x = [self avgCalcNewValue:p3d.x currentAvg:currVal.x numberOfsamples:currCounter];
             newVal.z = [self avgCalcNewValue:p3d.z currentAvg:currVal.z numberOfsamples:currCounter];
@@ -207,7 +223,7 @@ static const double resolution = 2.0; // Use Natural numbers. Using double for p
             currOffsetArr = self.arr_zyoffsets;
             currCountersArr = self.arr_zyCounters;
             Point3D *currVal = currOffsetArr[currSliceInQuadrant];
-            currCounter = [currCountersArr[currSliceInQuadrant] intValue];
+            currCounter = [currCountersArr[currSliceInQuadrant] longValue];
 
             newVal.y = [self avgCalcNewValue:p3d.y currentAvg:currVal.y numberOfsamples:currCounter];
             newVal.z = [self avgCalcNewValue:p3d.z currentAvg:currVal.z numberOfsamples:currCounter];
@@ -226,6 +242,12 @@ static const double resolution = 2.0; // Use Natural numbers. Using double for p
 
 - (void) updateGWithX:(double)x y:(double)y z:(double)z {
     static double avg = 0;
+    static double gThreshold = 1.15;
+    
+    if ( (x > gThreshold) || (y > gThreshold) || (z > gThreshold) ) {
+        NSLog(@"Strong force detected, skipping sample");
+        return;
+    }
     
 //    unsigned long test = ULONG_MAX;// LONG_MAX * 2 + 1; // twos complement for unsigned
 //    test += 1; // after many cycles the long will wrap around and the avg will be distorted a bit.
@@ -261,11 +283,11 @@ static const double resolution = 2.0; // Use Natural numbers. Using double for p
     int zxQuadrant = [self quadrant:theta_zx];
     int yzQuadrant = [self quadrant:theta_yz];
     
-//    [self.lblXY_Quadrant setText:[NSString stringWithFormat:@"%.1f|%d", theta_xy/M_PI, xyQuadrant]];
-//    [self.lblZX_Quadrant setText:[NSString stringWithFormat:@"%.1f|%d", theta_zx/M_PI, zxQuadrant]];
-//    [self.lblYZ_Quadrant setText:[NSString stringWithFormat:@"%.1f|%d", theta_yz/M_PI, yzQuadrant]];
+    //    [self.lblXY_Quadrant setText:[NSString stringWithFormat:@"%.1f|%d", theta_xy/M_PI, xyQuadrant]];
+    //    [self.lblZX_Quadrant setText:[NSString stringWithFormat:@"%.1f|%d", theta_zx/M_PI, zxQuadrant]];
+    //    [self.lblYZ_Quadrant setText:[NSString stringWithFormat:@"%.1f|%d", theta_yz/M_PI, yzQuadrant]];
     
-//    double acclX = gVec *
+    //    double acclX = gVec *
     double oneX = sin_phi * cos(theta_xy);
     double oneY = sin_phi * sin(theta_xy);
     double oneZ = cos(phi);
@@ -274,45 +296,67 @@ static const double resolution = 2.0; // Use Natural numbers. Using double for p
     Unit_minus_actual.x = oneX - x;
     Unit_minus_actual.y = oneY - y;
     Unit_minus_actual.z = oneZ - z;
-//    Unit_minus_actual.x = fabs(oneX - x);
-//    Unit_minus_actual.y = fabs(oneY - y);
-//    Unit_minus_actual.z = fabs(oneZ - z);
+    //    Unit_minus_actual.x = fabs(oneX - x);
+    //    Unit_minus_actual.y = fabs(oneY - y);
+    //    Unit_minus_actual.z = fabs(oneZ - z);
     
-//    Point3D *currVal = self.arr_xyoffsets[xyQuadrant];
-//    p3d.x = [self avgCalcNewValue:p3d.x currentAvg:currVal.x numberOfsamples:sampleCounter];
-//    p3d.y = [self avgCalcNewValue:p3d.y currentAvg:currVal.y numberOfsamples:sampleCounter];
-//    p3d.z = [self avgCalcNewValue:p3d.z currentAvg:currVal.z numberOfsamples:sampleCounter];
-//    self.arr_xyoffsets[xyQuadrant] = p3d;
+    //    Point3D *currVal = self.arr_xyoffsets[xyQuadrant];
+    //    p3d.x = [self avgCalcNewValue:p3d.x currentAvg:currVal.x numberOfsamples:sampleCounter];
+    //    p3d.y = [self avgCalcNewValue:p3d.y currentAvg:currVal.y numberOfsamples:sampleCounter];
+    //    p3d.z = [self avgCalcNewValue:p3d.z currentAvg:currVal.z numberOfsamples:sampleCounter];
+    //    self.arr_xyoffsets[xyQuadrant] = p3d;
     [self updateAvgSpaceSelect:0 newPoint:Unit_minus_actual quadrantSliceIx:xyQuadrant];
     [self updateAvgSpaceSelect:1 newPoint:Unit_minus_actual quadrantSliceIx:zxQuadrant];
     [self updateAvgSpaceSelect:2 newPoint:Unit_minus_actual quadrantSliceIx:yzQuadrant];
     
+    
+    
+    if (self.allDataVisible) {
+        int numOfGroups = resolution * 4;
+        NSMutableString *xyStr = [NSMutableString stringWithCapacity:200];
+        NSMutableString *yzStr = [NSMutableString stringWithCapacity:200];
+        NSMutableString *zxStr = [NSMutableString stringWithCapacity:200];
+        NSString *strFormat = @"\n%d\n%@=%.2f %@=%.2f\n";
+        
+        for (int txtIx = 0; txtIx < numOfGroups; txtIx++) {
+            int counterVal = [self.arr_xyCounters[txtIx] intValue];
+            Point3D *currSlice = self.arr_xyoffsets[txtIx];
+            NSString *currStr = [NSString stringWithFormat:strFormat, counterVal, @"x", currSlice.x, @"y", currSlice.y];
+            [xyStr appendString:currStr];
 
+            counterVal = [self.arr_zyCounters[txtIx] intValue];
+            currSlice = self.arr_zyoffsets[txtIx];
+            currStr = [NSString stringWithFormat:strFormat, counterVal, @"y", currSlice.y, @"z", currSlice.z];
+            [yzStr appendString:currStr];
 
-    [self.lblXY_Quadrant setText:[NSString stringWithFormat:@"%.3f", oneX]];
-    [self.lblZX_Quadrant setText:[NSString stringWithFormat:@"%.3f", oneY]];
-    [self.lblYZ_Quadrant setText:[NSString stringWithFormat:@"%.3f", oneZ]];
+            counterVal = [self.arr_xzCounters[txtIx] intValue];
+            currSlice = self.arr_xzoffsets[txtIx];
+            currStr = [NSString stringWithFormat:strFormat, counterVal, @"z", currSlice.z, @"x", currSlice.x];
+            [zxStr appendString:currStr];
+        }
+        
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self.lblAllDataXY setText:xyStr];
+            [self.lblAllDataYZ setText:yzStr];
+            [self.lblAllDataZX setText:zxStr];
+        });
+    } else {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self.lblXY_Quadrant setText:[NSString stringWithFormat:@"%.3f", oneX]];
+            [self.lblZX_Quadrant setText:[NSString stringWithFormat:@"%.3f", oneY]];
+            [self.lblYZ_Quadrant setText:[NSString stringWithFormat:@"%.3f", oneZ]];
+            
+            Point3D *pxy = self.arr_xyoffsets[xyQuadrant];
+            Point3D *pxz = self.arr_xzoffsets[zxQuadrant];
+            Point3D *pyz = self.arr_zyoffsets[yzQuadrant];
+            
+            [_lblDebug setText:[NSString stringWithFormat:@"Qxy %d, Qyz %d, Qzx %d\n(%.2f,%.2f) (%.2f,%.2f) (%.2f,%.2f)", xyQuadrant, yzQuadrant, zxQuadrant, pxy.x, pxy.y, pyz.y, pyz.z, pxz.z, pxz.x]];
+            
+            [self.lblGVec setText:[NSString stringWithFormat:@"%.3f", gVec]];
+            [self.lblGVecAvg setText:[NSString stringWithFormat:@"%.3f", avg]];
+        });
+    }
     
-    Point3D *pxy = self.arr_xyoffsets[xyQuadrant];
-    Point3D *pxz = self.arr_xzoffsets[zxQuadrant];
-    Point3D *pyz = self.arr_zyoffsets[yzQuadrant];
-    
-    [_lblDebug setText:[NSString stringWithFormat:@"Qxy %d, Qyz %d, Qzx %d\n(%.2f,%.2f) (%.2f,%.2f) (%.2f,%.2f)", xyQuadrant, yzQuadrant, zxQuadrant, pxy.x, pxy.y, pyz.y, pyz.z, pxz.z, pxz.x]];
-    
-    
-    
-//    int currIx = sampleCounter%avgWindowSize;
-//    self.arrWindow[currIx] = @(gVec);
-    
-//    if (sampleCounter > avgWindowSize) {
-//        double sum = 0;
-//        for (int ix = 0; ix < avgWindowSize; ix++) {
-//            sum += [self.arrWindow[ix] doubleValue];
-//        }
-//        avg = sum / avgWindowSize;
-        [self.lblGVec setText:[NSString stringWithFormat:@"%.3f", gVec]];
-        [self.lblGVecAvg setText:[NSString stringWithFormat:@"%.3f", avg]];
-//    }
     
     
     sampleCounter += 1;
@@ -385,5 +429,19 @@ static const double resolution = 2.0; // Use Natural numbers. Using double for p
     });
 }
 
+- (IBAction)btnShowAVGS:(id)sender {
+    [self.viewAllData setHidden:NO];
+    self.allDataVisible = YES;
+}
+
+
+- (IBAction)btnHideAVGS:(id)sender {
+    [self.viewAllData setHidden:YES];
+    self.allDataVisible = NO;
+}
+
+- (IBAction)btnPauseGraph:(id)sender {
+    self.graphEnabled = !self.graphEnabled;
+}
 
 @end
