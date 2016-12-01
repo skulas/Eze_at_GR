@@ -250,11 +250,30 @@ static const double resolution = 2.0; // Use Natural numbers. Using double for p
     currOffsetArr[currSliceInQuadrant] = newVal;
 }
 
+// NOT GOOD FOR LOW G VALUES
+//- (BOOL) isGVecIntertialX: (double) x Y: (double) y Z: (double) z {
+//    static double gLowThres = 0.9;
+//    static double gHighThres = 1.1;
+//    BOOL isNOTInertial = ( (x > gHighThres) || (y > gHighThres) || (z > gHighThres) ||
+//                          (x < -gHighThres) || (y < -gHighThres) || (z < -gHighThres) );
+//    
+//    if (!isNOTInertial) {
+//        isNOTInertial = ((x > -gLowThres) && (x < gLowThres)) ||
+//        ((y > -gLowThres) && (y < gLowThres)) ||
+//        ((z > -gLowThres) && (z < gLowThres));
+//    }
+//    
+//    return !isNOTInertial;
+//    
+//}
+
 - (void) updateGWithX:(double)x y:(double)y z:(double)z {
     static double avg = 0;
-    static double gThreshold = 1.15;
+    double gVecModule = sqrt(pow(x, 2)+pow(y, 2)+pow(z, 2));
+    static double low_g_thres = 0.9;
+    static double hig_g_thres = 1.1;
     
-    if ( (x > gThreshold) || (y > gThreshold) || (z > gThreshold) ) {
+    if ( (gVecModule < low_g_thres) || (hig_g_thres < gVecModule) ) {
         NSLog(@"Strong force detected, skipping sample");
         return;
     }
@@ -262,8 +281,7 @@ static const double resolution = 2.0; // Use Natural numbers. Using double for p
 //    unsigned long test = ULONG_MAX;// LONG_MAX * 2 + 1; // twos complement for unsigned
 //    test += 1; // after many cycles the long will wrap around and the avg will be distorted a bit.
     
-    double gVec = sqrt(pow(x, 2)+pow(y, 2)+pow(z, 2));
-    avg = [self avgCalcNewValue:gVec currentAvg:avg numberOfsamples:sampleCounter];
+    avg = [self avgCalcNewValue:gVecModule currentAvg:avg numberOfsamples:sampleCounter];
 
     double gVec_xy = sqrt(pow(x, 2)+pow(y, 2));
 //    double gVec_zx = sqrt(pow(x, 2)+pow(z, 2));
@@ -272,7 +290,7 @@ static const double resolution = 2.0; // Use Natural numbers. Using double for p
     double theta_xy = atan2(y,x);
     double theta_zx = atan2(x,z);
     double theta_yz = atan2(z,y);
-    double sin_phi = gVec_xy / gVec; // Always +
+    double sin_phi = gVec_xy / gVecModule; // Always +
     double phi = asin(sin_phi);     // Always +
     
     if (z < 0) {
@@ -366,7 +384,7 @@ static const double resolution = 2.0; // Use Natural numbers. Using double for p
                 
                 [_lblDebug setText:[NSString stringWithFormat:@"Qxy %d, Qyz %d, Qzx %d\n(%.2f,%.2f) (%.2f,%.2f) (%.2f,%.2f)", xyQuadrant, yzQuadrant, zxQuadrant, pxy.x, pxy.y, pyz.y, pyz.z, pxz.z, pxz.x]];
                 
-                [self.lblGVec setText:[NSString stringWithFormat:@"%.3f", gVec]];
+                [self.lblGVec setText:[NSString stringWithFormat:@"%.3f", gVecModule]];
                 [self.lblGVecAvg setText:[NSString stringWithFormat:@"%.3f", avg]];
             });
         }
