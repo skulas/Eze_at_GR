@@ -157,7 +157,7 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
     NSLog(@"startProxy");
     
     // If connecting via USB (to a vehicle).
-    self.proxy = [SDLProxyFactory buildSDLProxyWithListener:self];
+//    self.proxy = [SDLProxyFactory buildSDLProxyWithListener:self];
 
     // If connecting via TCP/IP (to an emulator).
     self.proxy = [SDLProxyFactory buildSDLProxyWithListener:self tcpIPAddress:self.RemoteIpAddress tcpPort:RemotePort];
