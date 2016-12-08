@@ -51,6 +51,7 @@
 #import "APLAppDelegate.h"
 #import "APLGraphView.h"
 #import <AudioToolbox/AudioToolbox.h>
+#import "GRAccelerometerOffsetDetector.h"
 
 static const NSTimeInterval accelerometerMin = 0.01;
 static const NSTimeInterval UI_REFRESH_RATE = 0.75;
@@ -60,20 +61,20 @@ static const NSTimeInterval UI_REFRESH_RATE = 0.75;
 static const double resolution = 2.0; // Use Natural numbers. Using double for performance
 //static const int avgWindowSize = 20;
 
-@interface Point3D : NSObject
+@interface Point3D__ : NSObject
 
 @property (nonatomic, assign) double x;
 @property (nonatomic, assign) double y;
 @property (nonatomic, assign) double z;
 
-+ (Point3D*) Zeroes;
++ (Point3D__*) Zeroes;
 
 @end
 
-@implementation Point3D
+@implementation Point3D__
 
-+ (Point3D*) Zeroes {
-    Point3D *zeroes = [[Point3D alloc] init];
++ (Point3D__*) Zeroes {
+    Point3D__ *zeroes = [[Point3D__ alloc] init];
     
     zeroes.x = 0;
     zeroes.y = 0;
@@ -141,9 +142,9 @@ static const double resolution = 2.0; // Use Natural numbers. Using double for p
     
     
     for (int ix = 0; ix < resolution*4; ix++) {
-        self.arr_xyoffsets[ix] = [Point3D Zeroes];
-        self.arr_xzoffsets[ix] = [Point3D Zeroes];
-        self.arr_zyoffsets[ix] = [Point3D Zeroes];
+        self.arr_xyoffsets[ix] = [Point3D__ Zeroes];
+        self.arr_xzoffsets[ix] = [Point3D__ Zeroes];
+        self.arr_zyoffsets[ix] = [Point3D__ Zeroes];
         self.arr_xyCounters[ix] = @(0);
         self.arr_xzCounters[ix] = @(0);
         self.arr_zyCounters[ix] = @(0);
@@ -197,10 +198,10 @@ static const double resolution = 2.0; // Use Natural numbers. Using double for p
  * @param quadrantSliceIx: Which section of the spce (resolution * 4 sections. 4 as there are 4 quadrants (++, -+, -- , +-)
  *
  */
-- (void) updateAvgSpaceSelect : (int) space newPoint : (Point3D*) p3d quadrantSliceIx : (int) currSliceInQuadrant {
+- (void) updateAvgSpaceSelect : (int) space newPoint : (Point3D__*) p3d quadrantSliceIx : (int) currSliceInQuadrant {
     NSMutableArray *currOffsetArr = nil;
     NSMutableArray *currCountersArr = nil;
-    Point3D *newVal = [Point3D Zeroes];
+    Point3D__ *newVal = [Point3D__ Zeroes];
     long currCounter;
     
     switch (space) {
@@ -208,7 +209,7 @@ static const double resolution = 2.0; // Use Natural numbers. Using double for p
         {
             currOffsetArr = self.arr_xyoffsets;
             currCountersArr = self.arr_xyCounters;
-            Point3D *currVal = currOffsetArr[currSliceInQuadrant];
+            Point3D__ *currVal = currOffsetArr[currSliceInQuadrant];
             currCounter = [currCountersArr[currSliceInQuadrant] longValue];
             
             newVal.x = [self avgCalcNewValue:p3d.x currentAvg:currVal.x numberOfsamples:currCounter];
@@ -220,7 +221,7 @@ static const double resolution = 2.0; // Use Natural numbers. Using double for p
         {
             currOffsetArr = self.arr_xzoffsets;
             currCountersArr = self.arr_xzCounters;
-            Point3D *currVal = currOffsetArr[currSliceInQuadrant];
+            Point3D__ *currVal = currOffsetArr[currSliceInQuadrant];
             currCounter = [currCountersArr[currSliceInQuadrant] longValue];
             
             newVal.x = [self avgCalcNewValue:p3d.x currentAvg:currVal.x numberOfsamples:currCounter];
@@ -232,7 +233,7 @@ static const double resolution = 2.0; // Use Natural numbers. Using double for p
         {
             currOffsetArr = self.arr_zyoffsets;
             currCountersArr = self.arr_zyCounters;
-            Point3D *currVal = currOffsetArr[currSliceInQuadrant];
+            Point3D__ *currVal = currOffsetArr[currSliceInQuadrant];
             currCounter = [currCountersArr[currSliceInQuadrant] longValue];
 
             newVal.y = [self avgCalcNewValue:p3d.y currentAvg:currVal.y numberOfsamples:currCounter];
@@ -272,6 +273,12 @@ static const double resolution = 2.0; // Use Natural numbers. Using double for p
     double gVecModule = sqrt(pow(x, 2)+pow(y, 2)+pow(z, 2));
     static double low_g_thres = 0.9;
     static double hig_g_thres = 1.1;
+    
+    ///// TEST ///////
+    GRVector gInVec = {x, y, z};
+    [[GRAccelerometerOffsetDetector sharedDetector] insertNewSample:gInVec];
+    /////
+    
     
     if ( (gVecModule < low_g_thres) || (hig_g_thres < gVecModule) ) {
         NSLog(@"Strong force detected, skipping sample");
@@ -320,7 +327,7 @@ static const double resolution = 2.0; // Use Natural numbers. Using double for p
     double oneY = sin_phi * sin(theta_xy);
     double oneZ = cos(phi);
     
-    Point3D *Unit_minus_actual = [[Point3D alloc] init];
+    Point3D__ *Unit_minus_actual = [[Point3D__ alloc] init];
     Unit_minus_actual.x = oneX - x;
     Unit_minus_actual.y = oneY - y;
     Unit_minus_actual.z = oneZ - z;
@@ -350,7 +357,7 @@ static const double resolution = 2.0; // Use Natural numbers. Using double for p
             
             for (int txtIx = 0; txtIx < numOfGroups; txtIx++) {
                 int counterVal = [self.arr_xyCounters[txtIx] intValue];
-                Point3D *currSlice = self.arr_xyoffsets[txtIx];
+                Point3D__ *currSlice = self.arr_xyoffsets[txtIx];
                 NSString *currStr = [NSString stringWithFormat:strFormat, counterVal, @"x", currSlice.x, @"y", currSlice.y];
                 [xyStr appendString:currStr];
                 
@@ -365,24 +372,29 @@ static const double resolution = 2.0; // Use Natural numbers. Using double for p
                 [zxStr appendString:currStr];
             }
             
+            
             dispatch_async(dispatch_get_main_queue(), ^{
                 [self.lblAllDataXY setText:xyStr];
                 [self.lblAllDataYZ setText:yzStr];
                 [self.lblAllDataZX setText:zxStr];
             });
         } else {
+            GRVector newCopy = gInVec;
             dispatch_async(dispatch_get_main_queue(), ^{
+                GRVector fixed = [[GRAccelerometerOffsetDetector sharedDetector] getFixedVectorWithG:newCopy];
+
                 [self setLabelValueX:x y:y z:z];
 
                 [self.lblXY_Quadrant setText:[NSString stringWithFormat:@"%.3f", oneX]];
                 [self.lblZX_Quadrant setText:[NSString stringWithFormat:@"%.3f", oneY]];
                 [self.lblYZ_Quadrant setText:[NSString stringWithFormat:@"%.3f", oneZ]];
                 
-                Point3D *pxy = self.arr_xyoffsets[xyQuadrant];
-                Point3D *pxz = self.arr_xzoffsets[zxQuadrant];
-                Point3D *pyz = self.arr_zyoffsets[yzQuadrant];
-                
-                [_lblDebug setText:[NSString stringWithFormat:@"Qxy %d, Qyz %d, Qzx %d\n(%.2f,%.2f) (%.2f,%.2f) (%.2f,%.2f)", xyQuadrant, yzQuadrant, zxQuadrant, pxy.x, pxy.y, pyz.y, pyz.z, pxz.z, pxz.x]];
+//                Point3D__ *pxy = self.arr_xyoffsets[xyQuadrant];
+//                Point3D__ *pxz = self.arr_xzoffsets[zxQuadrant];
+//                Point3D__ *pyz = self.arr_zyoffsets[yzQuadrant];
+//                
+//                [_lblDebug setText:[NSString stringWithFormat:@"Qxy %d, Qyz %d, Qzx %d\n(%.2f,%.2f) (%.2f,%.2f) (%.2f,%.2f)", xyQuadrant, yzQuadrant, zxQuadrant, pxy.x, pxy.y, pyz.y, pyz.z, pxz.z, pxz.x]];
+                [_lblDebug setText:[NSString stringWithFormat:@"x=%.3f,fx=%.3f\ty=%.3f,fy=%.3f\nz=%.3f,fz=%.3f", x, fixed.x, y, fixed.y, z, fixed.z]];
                 
                 [self.lblGVec setText:[NSString stringWithFormat:@"%.3f", gVecModule]];
                 [self.lblGVecAvg setText:[NSString stringWithFormat:@"%.3f", avg]];
