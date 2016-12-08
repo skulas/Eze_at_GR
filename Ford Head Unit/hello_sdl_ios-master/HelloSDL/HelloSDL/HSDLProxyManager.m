@@ -803,6 +803,11 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
     }
 }
 
+- (void) beginTrip {
+    NSLog(@"Begin Trip");
+}
+
+
 /**
  *  Subscribe to (periodic) vehicle data updates from SDL.
  */
@@ -812,6 +817,7 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
         SDLSubscribeVehicleData *subscribe = [[SDLSubscribeVehicleData alloc] init];
         subscribe.correlationID = [self hsdl_getNextCorrelationId];
 
+        subscribe.accPedalPosition = @YES;
         subscribe.speed = @YES;
         subscribe.gps = @YES;
         subscribe.tirePressure = @YES;
@@ -871,6 +877,11 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
         }
         [self clearDisplay];
 
+    } else if (notification.accPedalPosition) {
+        double pedalPosition = [notification.accPedalPosition doubleValue];
+        if (pedalPosition > 20) {
+            [self beginTrip];
+        }
     }
 }
 

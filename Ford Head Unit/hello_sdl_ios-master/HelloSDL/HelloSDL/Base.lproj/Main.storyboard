@@ -1,9 +1,13 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="10117" systemVersion="15G1004" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" initialViewController="BYZ-38-t0r">
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="11542" systemVersion="15G1004" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" colorMatched="YES" initialViewController="BYZ-38-t0r">
+    <device id="retina4_0" orientation="portrait">
+        <adaptation id="fullscreen"/>
+    </device>
     <dependencies>
-        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="10085"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="11524"/>
         <capability name="Aspect ratio constraints" minToolsVersion="5.1"/>
         <capability name="Constraints with non-1.0 multipliers" minToolsVersion="5.1"/>
+        <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
     </dependencies>
     <scenes>
         <!--View Controller-->
@@ -15,24 +19,24 @@
                         <viewControllerLayoutGuide type="bottom" id="wfy-db-euE"/>
                     </layoutGuides>
                     <view key="view" contentMode="scaleToFill" id="8bC-Xf-vdC">
-                        <rect key="frame" x="0.0" y="0.0" width="600" height="600"/>
+                        <rect key="frame" x="0.0" y="0.0" width="320" height="568"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
-                            <imageView userInteractionEnabled="NO" contentMode="scaleToFill" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="green_road_logo" translatesAutoresizingMaskIntoConstraints="NO" id="nqD-Cg-Nzw">
+                            <imageView userInteractionEnabled="NO" contentMode="scaleToFill" horizontalHuggingPriority="251" verticalHuggingPriority="251" misplaced="YES" image="green_road_logo" translatesAutoresizingMaskIntoConstraints="NO" id="nqD-Cg-Nzw">
                                 <rect key="frame" x="200" y="140" width="200" height="200"/>
                                 <constraints>
                                     <constraint firstAttribute="width" secondItem="nqD-Cg-Nzw" secondAttribute="height" multiplier="500:500" id="3FL-YX-eTK"/>
                                     <constraint firstAttribute="width" constant="200" id="z7u-Gf-8lA"/>
                                 </constraints>
                             </imageView>
-                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Unlocked" textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="M1X-R1-KlX">
+                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" misplaced="YES" text="Unlocked" textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="M1X-R1-KlX">
                                 <rect key="frame" x="264" y="350" width="73" height="21"/>
                                 <fontDescription key="fontDescription" type="system" pointSize="17"/>
-                                <color key="textColor" red="0.0" green="0.0" blue="0.0" alpha="1" colorSpace="calibratedRGB"/>
+                                <color key="textColor" red="0.0" green="0.0" blue="0.0" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                                 <nil key="highlightedColor"/>
                             </label>
                         </subviews>
-                        <color key="backgroundColor" white="1" alpha="1" colorSpace="custom" customColorSpace="calibratedWhite"/>
+                        <color key="backgroundColor" red="1" green="1" blue="1" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                         <constraints>
                             <constraint firstItem="nqD-Cg-Nzw" firstAttribute="centerX" secondItem="8bC-Xf-vdC" secondAttribute="centerX" id="FfC-sF-tog"/>
                             <constraint firstItem="M1X-R1-KlX" firstAttribute="centerY" secondItem="8bC-Xf-vdC" secondAttribute="centerY" multiplier="1.2" id="hNe-S1-WS9"/>
@@ -54,11 +58,11 @@
                         <viewControllerLayoutGuide type="bottom" id="PFd-lo-yBN"/>
                     </layoutGuides>
                     <view key="view" contentMode="scaleToFill" id="9kI-Dw-iP6">
-                        <rect key="frame" x="0.0" y="0.0" width="600" height="600"/>
+                        <rect key="frame" x="0.0" y="0.0" width="320" height="568"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
                             <view hidden="YES" alpha="0.0" contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="aKf-QM-0Nb" userLabel="Locked View">
-                                <rect key="frame" x="112" y="68" width="376" height="464"/>
+                                <rect key="frame" x="-28" y="52" width="376" height="464"/>
                                 <subviews>
                                     <imageView userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="ford_logo" translatesAutoresizingMaskIntoConstraints="NO" id="pUv-yZ-yga">
                                         <rect key="frame" x="68" y="0.0" width="240" height="92"/>
@@ -67,14 +71,14 @@
                                             <constraint firstAttribute="width" constant="240" id="a6V-0R-e6L"/>
                                         </constraints>
                                     </imageView>
-                                    <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" misplaced="YES" text="Locked" textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="BQ3-BF-6eZ">
-                                        <rect key="frame" x="160" y="418" width="56" height="21"/>
+                                    <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Synced" textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="BQ3-BF-6eZ">
+                                        <rect key="frame" x="150" y="407.5" width="77" height="31.5"/>
                                         <fontDescription key="fontDescription" name="MarkerFelt-Wide" family="Marker Felt" pointSize="24"/>
-                                        <color key="textColor" red="0.0" green="0.0" blue="0.0" alpha="1" colorSpace="calibratedRGB"/>
+                                        <color key="textColor" red="0.0" green="0.0" blue="0.0" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                                         <nil key="highlightedColor"/>
                                     </label>
                                 </subviews>
-                                <color key="backgroundColor" white="0.0" alpha="0.0" colorSpace="calibratedWhite"/>
+                                <color key="backgroundColor" red="0.0" green="0.0" blue="0.0" alpha="0.0" colorSpace="custom" customColorSpace="sRGB"/>
                                 <constraints>
                                     <constraint firstItem="pUv-yZ-yga" firstAttribute="top" secondItem="aKf-QM-0Nb" secondAttribute="top" id="4VT-h9-327"/>
                                     <constraint firstAttribute="bottom" secondItem="BQ3-BF-6eZ" secondAttribute="bottom" constant="25" id="Qf6-B1-YoG"/>
@@ -91,14 +95,14 @@
                                 </variation>
                             </view>
                             <imageView userInteractionEnabled="NO" contentMode="scaleToFill" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="green_road_logo" translatesAutoresizingMaskIntoConstraints="NO" id="AjN-EV-8PV">
-                                <rect key="frame" x="200" y="140" width="200" height="200"/>
+                                <rect key="frame" x="60" y="127" width="200" height="200"/>
                                 <constraints>
                                     <constraint firstAttribute="width" secondItem="AjN-EV-8PV" secondAttribute="height" multiplier="500:500" id="1QQ-lC-b3M"/>
                                     <constraint firstAttribute="width" constant="200" id="JEb-xe-gwe"/>
                                 </constraints>
                             </imageView>
                         </subviews>
-                        <color key="backgroundColor" white="1" alpha="1" colorSpace="calibratedWhite"/>
+                        <color key="backgroundColor" red="1" green="1" blue="1" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                         <constraints>
                             <constraint firstItem="AjN-EV-8PV" firstAttribute="centerX" secondItem="9kI-Dw-iP6" secondAttribute="centerX" id="4bg-bu-9y3"/>
                             <constraint firstItem="aKf-QM-0Nb" firstAttribute="centerX" secondItem="9kI-Dw-iP6" secondAttribute="centerX" id="mNS-lN-h9K"/>
@@ -119,6 +123,6 @@
     </scenes>
     <resources>
         <image name="ford_logo" width="1000" height="382"/>
-        <image name="green_road_logo" width="180" height="180"/>
+        <image name="green_road_logo" width="150" height="150"/>
     </resources>
 </document>
