@@ -21,6 +21,10 @@ typedef NS_OPTIONS(NSUInteger, GRBootSteps) {
 static const GRBootSteps kBootStatusReady = GRBootStepHMIStatus | GRBootStepAppInterface;
 static GRBootSteps bootStatus = GRBootNotStarted;
 
+// Delay between auto generated events.
+static const double kDelayBetweenEvents = 4;
+static const double kDelayToResetToDriving = 6;
+
 
 // TCP/IP (Emulator) configuration
 static NSString *const RemotePort = @"12345";
@@ -47,6 +51,10 @@ static const NSUInteger BeginDriveCommandID = 2;
 static NSString *const strBeginTripText = @"GreenRoad trip started";
 static NSString *const strBeginTripVoice = @"GreenRoad trip started";
 
+// Drive States
+static NSString *const strCorneringText = @"Cornering";
+static NSString *const strCorneringVoice = @"Cornering";
+
 // Test Alert
 static const NSUInteger TestAlertButtonID = 0xB52;
 
@@ -59,15 +67,22 @@ static NSString *const imgEventBrake = @"event_brake";
 static NSString *const imgEventCornerRight = @"event_corner_right";
 static NSString *const imgEventCornerLeft = @"event_corner_left";
 static NSString *const imgDrivingGreenImgFilename = @"DrivingGreen";
+static NSString *const imgDrivingYellowImgFilename = @"DrivingYellow";
+static NSString *const imgDrivingRedImgFilename = @"DrivingRed";
 static NSString *const imgDriveSafeGreen = @"DriveSafeGreen";
+static NSString *const imgCorneringGreen = @"CorneringGreen";
 
 static const int imgIdDrivingGreen = 15894239;
+static const int imgIdDrivingYellow = 15894240;
+static const int imgIdDrivingRed = 15894241;
 static const int imgIdDriveSafe = 0xD65173;
 static const int imgIdEmpty = 4321234;
 static const int imgIdAxl = 0xBADA55;
 static const int imgIdBrake = 0xBEAC5;
 static const int imgIdCornerLeft = 0x7EF7;
 static const int imgIdCornerRight = 0x17E1;
+static const int imgIdCorneringGreen = 0x5AD0;
+
 
 static const int scoreButtonId = 0xB077;
 
@@ -93,7 +108,8 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
 @property (nonatomic, assign) BOOL tripStarted;
 
 @property (nonatomic, strong) NSString *strTiresStatus;
-
+@property (nonatomic, strong) SDLImage *sdlImgCurrentImage;
+@property (nonatomic, strong) NSString *strStickyFirstLine;
 
 @end
 
@@ -125,9 +141,14 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
         _vehicleDataSubscribed = NO;
         
         self.tripStarted = NO;
+        self.sdlImgCurrentImage = nil;
+        self.strStickyFirstLine = @"";
         
-        self.uploadsQueue = [NSMutableArray arrayWithArray:@[@[@(imgIdDriveSafe), imgDriveSafeGreen],
+        self.uploadsQueue = [NSMutableArray arrayWithArray:@[@[@(imgIdDriveSafe), imgDriveSafeGreen], // This must be the first no matter what
                                                              @[@(imgIdDrivingGreen), imgDrivingGreenImgFilename],
+                                                             @[@(imgIdDrivingYellow), imgDrivingYellowImgFilename],
+                                                             @[@(imgIdDrivingRed), imgDrivingRedImgFilename],
+                                                             @[@(imgIdCorneringGreen), imgCorneringGreen],
                                                              @[@(imgIdEmpty), @"emptyImg"],
                                                              @[@(imgIdAxl), imgEventAxl],
                                                              @[@(imgIdBrake), imgEventBrake],
@@ -478,6 +499,15 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
             case imgIdDrivingGreen:
                 imgName = @"DrivingGreen";
                 break;
+            case imgIdDrivingYellow:
+                imgName = @"DrivingYellow";
+                break;
+            case imgIdDrivingRed:
+                imgName = @"DrivingRed";
+                break;
+            case imgIdCorneringGreen:
+                imgName = @"Cornering Green";
+                break;
             case imgIdAxl:
                 imgName = @"Acceleration event";
                 break;
@@ -678,7 +708,7 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
 
 - (void) clearDisplay {
     SDLShow *showNothing = [[SDLShow alloc] init];
-    showNothing.mainField1 = @"";
+    showNothing.mainField1 = self.strStickyFirstLine;
     showNothing.mainField2 = @"";
     showNothing.mainField3 = @"";
     showNothing.mainField4 = self.strTiresStatus;
@@ -687,7 +717,11 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
     
     SDLImage *emptyImg = [self sdlImgByName:@"emptyImg"];
 
-    showNothing.graphic = emptyImg;
+    if (self.sdlImgCurrentImage == nil) {
+        showNothing.graphic = emptyImg;
+    } else {
+        showNothing.graphic = self.sdlImgCurrentImage;
+    }
 
     NSLog(@"Clearing display");
     showNothing.correlationID = [self hsdl_getNextCorrelationId];
@@ -784,6 +818,13 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
 
 #pragma mark GreenRoad States
 
+- (double) delay {
+    int delayVariant = arc4random_uniform(4);
+    double delay = kDelayBetweenEvents + delayVariant;
+    
+    return delay;
+}
+
 - (void) beginTrip {
     if (!self.tripStarted) {
         self.tripStarted = YES;
@@ -799,14 +840,72 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
         
         SDLSpeak *speak = [SDLRPCRequestFactory buildSpeakWithTTS:strBeginTripVoice correlationID:[self hsdl_getNextCorrelationId]];
         [self.proxy sendRPC:speak];
+        
+        self.sdlImgCurrentImage = sdlImgDriving;
+        
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            [self clearDisplay];
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)([self delay] * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                [self cornering];
+            });
+        });
+    }
+}
+
+- (void) cornering {
+    NSLog(@"Cornering");
+    
+    SDLImage *sdlImgCornering = [self sdlImgByName:imgCorneringGreen];
+    SDLShow *show = [[SDLShow alloc] init];
+    show.mainField1 = strCorneringText;
+    show.alignment = [SDLTextAlignment CENTERED];
+    show.correlationID = [self hsdl_getNextCorrelationId];
+    show.graphic = sdlImgCornering;
+    [self.proxy sendRPC:show];
+    
+    SDLSpeak *speak = [SDLRPCRequestFactory buildSpeakWithTTS:strCorneringVoice correlationID:[self hsdl_getNextCorrelationId]];
+    [self.proxy sendRPC:speak];
+    
+    self.strStickyFirstLine = strCorneringText;
+    self.sdlImgCurrentImage = sdlImgCornering;
+    
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kDelayToResetToDriving * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        [self resetToDriving:0];
+    });
+}
+
+- (void) resetToDriving : (int) level {
+    NSString *imgName;
+    
+    switch (level) {
+        case 0:
+            imgName = imgDrivingGreenImgFilename;
+            break;
+        case 1:
+            imgName = imgDrivingYellowImgFilename;
+            break;
+        case 2:
+            imgName = imgDrivingRedImgFilename;
+            break;
+        default:
+            break;
     }
 
+    SDLImage *sdlImgDrivingImg = [self sdlImgByName:imgName];
+//    SDLShow *show = [[SDLShow alloc] init];
+//    show.mainField1 = @"";
+//    show.correlationID = [self hsdl_getNextCorrelationId];
+//    show.graphic = sdlImgDrivingImg;
+//    [self.proxy sendRPC:show];
+    
+    self.sdlImgCurrentImage = sdlImgDrivingImg;
+    self.strStickyFirstLine = @"";
+    [self clearDisplay];
 }
 
 
 
-
-#pragma mark VehicleData
+#pragma mark - VehicleData
 
 // vehicle data Area
 
@@ -896,7 +995,6 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
             self.strTiresStatus = @"";
         }
         [self clearDisplay];
-
     } else if (notification.accPedalPosition) {
         double pedalPosition = [notification.accPedalPosition doubleValue];
         if (pedalPosition > 20) {
