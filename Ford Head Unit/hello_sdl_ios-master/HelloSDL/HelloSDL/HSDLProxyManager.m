@@ -59,6 +59,11 @@ static NSString *const strBrakingVoice = @"Braking";
 static NSString *const strAxlerating1Text = @"Ease the acceleration for a greener trip";
 static NSString *const strAxlerating2Text = @"next time cosider pushing the pedal half way";
 static NSString *const strAxleratingVoice = @"Acceleration";
+static NSString *const strLaneEvent1Text = @"Lane event";
+static NSString *const strLaneEventVoice = @"Lane event";
+static NSString *const strCoffeeText = @"Stop For A Coffee";
+static NSString *const strCoffeeCouponText = @"coupon on us ...";
+static NSString *const strCoffeeVoice = @"Time for cofeebrake, we invite";
 
 // Test Alert
 static const NSUInteger TestAlertButtonID = 0xB52;
@@ -78,6 +83,7 @@ static NSString *const imgDriveSafeGreen = @"DriveSafeGreen";
 static NSString *const imgCorneringGreen = @"CorneringGreen";
 static NSString *const imgBrakingYellow = @"BrakingYellow";
 static NSString *const imgAxlratingYellow = @"AxleratingYellow";
+static NSString *const imgLaneHandlingRed = @"LaneHandlingRed";
 
 static const int imgIdDrivingGreen = 15894239;
 static const int imgIdDrivingYellow = 15894240;
@@ -91,6 +97,7 @@ static const int imgIdCornerRight = 0x17E1;
 static const int imgIdCorneringGreen = 0x5AD0;
 static const int imgIdBrakingYellow = 0xBAD1;
 static const int imgIdAxlratingYellow = 0xBAD2;
+static const int imgIdLaneHandlingRed = 0xBAD3;
 
 
 static const int scoreButtonId = 0xB077;
@@ -116,6 +123,8 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
 
 @property (nonatomic, assign) BOOL tripStarted;
 @property (nonatomic, assign) BOOL axleratingEventHappening;
+@property (nonatomic, assign) BOOL zigzagEventHappening;
+@property (nonatomic, strong) NSDate *lastWheelShake;
 
 @property (nonatomic, strong) NSString *strTiresStatus;
 @property (nonatomic, strong) SDLImage *sdlImgCurrentImage;
@@ -152,8 +161,10 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
         
         self.tripStarted = NO;
         self.axleratingEventHappening = NO;
+        self.zigzagEventHappening = NO;
         self.sdlImgCurrentImage = nil;
         self.strStickyFirstLine = @"";
+        self.lastWheelShake = nil;
         
         self.uploadsQueue = [NSMutableArray arrayWithArray:@[@[@(imgIdDriveSafe), imgDriveSafeGreen], // This must be the first no matter what
                                                              @[@(imgIdDrivingGreen), imgDrivingGreenImgFilename],
@@ -162,6 +173,7 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
                                                              @[@(imgIdCorneringGreen), imgCorneringGreen],
                                                              @[@(imgIdBrakingYellow), imgBrakingYellow],
                                                              @[@(imgIdAxlratingYellow), imgAxlratingYellow],
+                                                             @[@(imgIdLaneHandlingRed), imgLaneHandlingRed],
                                                              @[@(imgIdEmpty), @"emptyImg"],
                                                              @[@(imgIdAxl), imgEventAxl],
                                                              @[@(imgIdBrake), imgEventBrake],
@@ -526,6 +538,9 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
                 break;
             case imgIdAxlratingYellow:
                 imgName = @"Axlerating Yellow";
+                break;
+            case imgIdLaneHandlingRed:
+                imgName = @"Lane Handling Red";
                 break;
             case imgIdAxl:
                 imgName = @"Acceleration event";
@@ -941,6 +956,47 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
     }
 }
 
+- (void) zigzaging {
+    if (!self.zigzagEventHappening) {
+        self.zigzagEventHappening = YES;
+        NSLog(@"Zigzag");
+        
+        SDLImage *sdlImgZigZag = [self sdlImgByName:imgLaneHandlingRed];
+        SDLShow *show = [[SDLShow alloc] init];
+        show.mainField1 = strLaneEvent1Text;
+        show.alignment = [SDLTextAlignment LEFT_ALIGNED];
+        show.correlationID = [self hsdl_getNextCorrelationId];
+        show.graphic = sdlImgZigZag;
+        [self.proxy sendRPC:show];
+        
+        SDLSpeak *speak = [SDLRPCRequestFactory buildSpeakWithTTS:strLaneEventVoice correlationID:[self hsdl_getNextCorrelationId]];
+        [self.proxy sendRPC:speak];
+        
+        self.strStickyFirstLine = strLaneEvent1Text;
+        self.sdlImgCurrentImage = sdlImgZigZag;
+        
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kDelayToResetToDriving * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            [self resetToDriving:2];
+        });
+    }
+}
+
+- (void) cofeeBreak {
+    SDLShow *show = [[SDLShow alloc] init];
+    show.mainField1 = strCoffeeText;
+    show.mainField3 = strCoffeeCouponText;
+    show.alignment = [SDLTextAlignment LEFT_ALIGNED];
+    show.correlationID = [self hsdl_getNextCorrelationId];
+    
+    [self.proxy sendRPC:show];
+    
+    SDLSpeak *speak = [SDLRPCRequestFactory buildSpeakWithTTS:strCoffeeVoice correlationID:[self hsdl_getNextCorrelationId]];
+    [self.proxy sendRPC:speak];
+    
+    self.strStickyFirstLine = strLaneEvent1Text;
+    self.sdlImgCurrentImage = [self sdlImgByName:imgDrivingRedImgFilename];
+}
+
 - (void) resetToDriving : (int) level {
     NSString *imgName;
     dispatch_block_t whatToDoNext;
@@ -961,8 +1017,13 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
             };
         }
             break;
-        case 2:
+        case 2: {
             imgName = imgDrivingRedImgFilename;
+            whatToDoNext = ^void() {
+                NSLog(@"Back from wheel event");
+                [self cofeeBreak];
+            };
+        }
             break;
         default:
             break;
@@ -1016,6 +1077,7 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
         subscribe.correlationID = [self hsdl_getNextCorrelationId];
 
         subscribe.accPedalPosition = @YES;
+        subscribe.steeringWheelAngle = @YES;
         subscribe.speed = @YES;
         subscribe.gps = @YES;
         subscribe.tirePressure = @YES;
@@ -1081,6 +1143,13 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
         } else if (pedalPosition > 20) {
             [self beginTrip];
         }
+    } else if (notification.steeringWheelAngle) {
+        double steeringWheelAngle = [notification.steeringWheelAngle doubleValue];
+        NSLog(@"Steering wheel angle = %.2f", steeringWheelAngle);
+        
+        if ([self steeringWheelEventHappened:steeringWheelAngle]) {
+            [self zigzaging];
+        }
     }
 }
 
@@ -1092,6 +1161,39 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
     }
     
     return tireIsAreBad;
+}
+
+- (BOOL) steeringWheelEventHappened : (double) latestSteeringWheel {
+    BOOL eventHappened = NO;
+    static double _lastSteeringAngle = 0.0;
+    static double _steeringAccumulator;
+    static NSDate *_lastSteeringEventTime = nil;
+    static const NSTimeInterval kSteeringEventLength = 1.0; // Secs
+    
+    if (_lastSteeringEventTime != nil) {
+        NSTimeInterval lapseBetweenEvents = [[NSDate date] timeIntervalSinceDate:_lastSteeringEventTime];
+        
+        if (lapseBetweenEvents < kSteeringEventLength) { // two wheel events in less than a second.
+            double newAccu = fabs(latestSteeringWheel);
+            if (signbit(_lastSteeringAngle) != signbit(latestSteeringWheel)) {
+                newAccu *= 2;
+            }
+            
+            _steeringAccumulator += newAccu;
+            NSLog(@"Stiring accumulator = %.1f", _steeringAccumulator);
+            
+            eventHappened = (_steeringAccumulator > 360);
+        } else {
+            _steeringAccumulator = 0;
+        }
+    }
+    
+    
+    _lastSteeringAngle = latestSteeringWheel;
+//    _lastSteeringEventTime = [[NSDate alloc] initWithTimeInterval:0 sinceDate:[NSDate date]];
+    _lastSteeringEventTime = [NSDate date];
+    
+    return eventHappened;
 }
 
 /*
