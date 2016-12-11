@@ -54,6 +54,11 @@ static NSString *const strBeginTripVoice = @"GreenRoad trip started";
 // Drive States
 static NSString *const strCorneringText = @"Cornering";
 static NSString *const strCorneringVoice = @"Cornering";
+static NSString *const strBrakingText = @"Braking";
+static NSString *const strBrakingVoice = @"Braking";
+static NSString *const strAxlerating1Text = @"Ease the acceleration for a greener trip";
+static NSString *const strAxlerating2Text = @"next time cosider pushing the pedal half way";
+static NSString *const strAxleratingVoice = @"Acceleration";
 
 // Test Alert
 static const NSUInteger TestAlertButtonID = 0xB52;
@@ -71,6 +76,8 @@ static NSString *const imgDrivingYellowImgFilename = @"DrivingYellow";
 static NSString *const imgDrivingRedImgFilename = @"DrivingRed";
 static NSString *const imgDriveSafeGreen = @"DriveSafeGreen";
 static NSString *const imgCorneringGreen = @"CorneringGreen";
+static NSString *const imgBrakingYellow = @"BrakingYellow";
+static NSString *const imgAxlratingYellow = @"AxleratingYellow";
 
 static const int imgIdDrivingGreen = 15894239;
 static const int imgIdDrivingYellow = 15894240;
@@ -82,6 +89,8 @@ static const int imgIdBrake = 0xBEAC5;
 static const int imgIdCornerLeft = 0x7EF7;
 static const int imgIdCornerRight = 0x17E1;
 static const int imgIdCorneringGreen = 0x5AD0;
+static const int imgIdBrakingYellow = 0xBAD1;
+static const int imgIdAxlratingYellow = 0xBAD2;
 
 
 static const int scoreButtonId = 0xB077;
@@ -106,6 +115,7 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
 @property (nonatomic, strong) NSMutableArray *uploadsQueue;
 
 @property (nonatomic, assign) BOOL tripStarted;
+@property (nonatomic, assign) BOOL axleratingEventHappening;
 
 @property (nonatomic, strong) NSString *strTiresStatus;
 @property (nonatomic, strong) SDLImage *sdlImgCurrentImage;
@@ -141,6 +151,7 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
         _vehicleDataSubscribed = NO;
         
         self.tripStarted = NO;
+        self.axleratingEventHappening = NO;
         self.sdlImgCurrentImage = nil;
         self.strStickyFirstLine = @"";
         
@@ -149,6 +160,8 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
                                                              @[@(imgIdDrivingYellow), imgDrivingYellowImgFilename],
                                                              @[@(imgIdDrivingRed), imgDrivingRedImgFilename],
                                                              @[@(imgIdCorneringGreen), imgCorneringGreen],
+                                                             @[@(imgIdBrakingYellow), imgBrakingYellow],
+                                                             @[@(imgIdAxlratingYellow), imgAxlratingYellow],
                                                              @[@(imgIdEmpty), @"emptyImg"],
                                                              @[@(imgIdAxl), imgEventAxl],
                                                              @[@(imgIdBrake), imgEventBrake],
@@ -507,6 +520,12 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
                 break;
             case imgIdCorneringGreen:
                 imgName = @"Cornering Green";
+                break;
+            case imgIdBrakingYellow:
+                imgName = @"Braking Yellow";
+                break;
+            case imgIdAxlratingYellow:
+                imgName = @"Axlerating Yellow";
                 break;
             case imgIdAxl:
                 imgName = @"Acceleration event";
@@ -874,15 +893,73 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
     });
 }
 
+- (void) braking {
+    NSLog(@"Braking");
+    
+    SDLImage *sdlImgBraking = [self sdlImgByName:imgBrakingYellow];
+    SDLShow *show = [[SDLShow alloc] init];
+    show.mainField1 = strBrakingText;
+    show.alignment = [SDLTextAlignment CENTERED];
+    show.correlationID = [self hsdl_getNextCorrelationId];
+    show.graphic = sdlImgBraking;
+    [self.proxy sendRPC:show];
+    
+    SDLSpeak *speak = [SDLRPCRequestFactory buildSpeakWithTTS:strBrakingVoice correlationID:[self hsdl_getNextCorrelationId]];
+    [self.proxy sendRPC:speak];
+    
+    self.strStickyFirstLine = strBrakingText;
+    self.sdlImgCurrentImage = sdlImgBraking;
+    
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kDelayToResetToDriving * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        [self resetToDriving:1];
+    });
+}
+
+- (void) axlerating {
+    if (!self.axleratingEventHappening) {
+        self.axleratingEventHappening = YES;
+        NSLog(@"Axlerating");
+        
+        SDLImage *sdlImgAxlerating = [self sdlImgByName:imgAxlratingYellow];
+        SDLShow *show = [[SDLShow alloc] init];
+        show.mainField1 = strAxlerating1Text;
+        show.mainField3 = strAxlerating2Text;
+        show.alignment = [SDLTextAlignment LEFT_ALIGNED];
+        show.correlationID = [self hsdl_getNextCorrelationId];
+        show.graphic = sdlImgAxlerating;
+        [self.proxy sendRPC:show];
+        
+        SDLSpeak *speak = [SDLRPCRequestFactory buildSpeakWithTTS:strAxleratingVoice correlationID:[self hsdl_getNextCorrelationId]];
+        [self.proxy sendRPC:speak];
+        
+        self.strStickyFirstLine = strBrakingText;
+        self.sdlImgCurrentImage = sdlImgAxlerating;
+        
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kDelayToResetToDriving * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            [self resetToDriving:1];
+        });
+    }
+}
+
 - (void) resetToDriving : (int) level {
     NSString *imgName;
+    dispatch_block_t whatToDoNext;
     
     switch (level) {
-        case 0:
+        case 0: {
             imgName = imgDrivingGreenImgFilename;
+            whatToDoNext = ^void() {
+                [self braking];
+            };
+        }
             break;
-        case 1:
+        case 1: {
             imgName = imgDrivingYellowImgFilename;
+            whatToDoNext = ^void() {
+                NSLog(@"Waiting for pedal");
+                self.axleratingEventHappening = NO;
+            };
+        }
             break;
         case 2:
             imgName = imgDrivingRedImgFilename;
@@ -901,6 +978,8 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
     self.sdlImgCurrentImage = sdlImgDrivingImg;
     self.strStickyFirstLine = @"";
     [self clearDisplay];
+    
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)([self delay] * NSEC_PER_SEC)), dispatch_get_main_queue(), whatToDoNext);
 }
 
 
@@ -997,7 +1076,9 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
         [self clearDisplay];
     } else if (notification.accPedalPosition) {
         double pedalPosition = [notification.accPedalPosition doubleValue];
-        if (pedalPosition > 20) {
+        if (pedalPosition > 90) {
+            [self axlerating];
+        } else if (pedalPosition > 20) {
             [self beginTrip];
         }
     }
