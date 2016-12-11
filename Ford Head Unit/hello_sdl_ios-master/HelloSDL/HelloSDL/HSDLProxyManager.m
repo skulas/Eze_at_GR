@@ -34,8 +34,6 @@ static NSString *const AppVrSynonym = @"Hello S D L";
 static NSString *const IconFile = @"green_road_logo"; // @"sdl_icon.png";
 static const NSUInteger AppIconIdInt = 0xA96A;
 
-static NSString *const PruebitaImgFilename = @"Pruebita";
-static NSUInteger const PruebitaImgId = 15894239;
 // Welcome message
 static NSString *const WelcomeShow = @"Welcome to GreenRoad";
 static NSString *const WelcomeSpeak = @"Welcome to Green Road";
@@ -46,20 +44,31 @@ static const NSUInteger TestCommandID = 1;
 // Begin Drive Command
 static NSString *const BeginDriveCommandName = @"Begin Drive";
 static const NSUInteger BeginDriveCommandID = 2;
+static NSString *const strBeginTripText = @"GreenRoad trip started";
+static NSString *const strBeginTripVoice = @"GreenRoad trip started";
 
 // Test Alert
 static const NSUInteger TestAlertButtonID = 0xB52;
 
+/**
+        IMAGES
+ **/
 // Events
 static NSString *const imgEventAxl = @"event_axl";
 static NSString *const imgEventBrake = @"event_brake";
 static NSString *const imgEventCornerRight = @"event_corner_right";
 static NSString *const imgEventCornerLeft = @"event_corner_left";
-static const int emptyImgId = 4321234;
-static const int axlImgId = 0xBADA55;
-static const int brakeImgId = 0xBEAC5;
-static const int cornerLeftImgId = 0x7EF7;
-static const int cornerRightImgId = 0x17E1;
+static NSString *const imgDrivingGreenImgFilename = @"DrivingGreen";
+static NSString *const imgDriveSafeGreen = @"DriveSafeGreen";
+
+static const int imgIdDrivingGreen = 15894239;
+static const int imgIdDriveSafe = 0xD65173;
+static const int imgIdEmpty = 4321234;
+static const int imgIdAxl = 0xBADA55;
+static const int imgIdBrake = 0xBEAC5;
+static const int imgIdCornerLeft = 0x7EF7;
+static const int imgIdCornerRight = 0x17E1;
+
 static const int scoreButtonId = 0xB077;
 
 
@@ -80,6 +89,8 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
 @property (nonatomic, assign, getter=isVehicleDataSubscribed) BOOL vehicleDataSubscribed;
 @property(nonatomic, strong) NSString *RemoteIpAddress;
 @property (nonatomic, strong) NSMutableArray *uploadsQueue;
+
+@property (nonatomic, assign) BOOL tripStarted;
 
 @property (nonatomic, strong) NSString *strTiresStatus;
 
@@ -113,12 +124,15 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
         _remoteImages = [[NSMutableSet alloc] init];
         _vehicleDataSubscribed = NO;
         
-        self.uploadsQueue = [NSMutableArray arrayWithArray:@[@[@(PruebitaImgId), PruebitaImgFilename],
-                                                             @[@(emptyImgId), @"emptyImg"],
-                                                             @[@(axlImgId), imgEventAxl],
-                                                             @[@(brakeImgId), imgEventBrake],
-                                                             @[@(cornerLeftImgId), imgEventCornerLeft],
-                                                             @[@(cornerRightImgId), imgEventCornerRight]]];
+        self.tripStarted = NO;
+        
+        self.uploadsQueue = [NSMutableArray arrayWithArray:@[@[@(imgIdDriveSafe), imgDriveSafeGreen],
+                                                             @[@(imgIdDrivingGreen), imgDrivingGreenImgFilename],
+                                                             @[@(imgIdEmpty), @"emptyImg"],
+                                                             @[@(imgIdAxl), imgEventAxl],
+                                                             @[@(imgIdBrake), imgEventBrake],
+                                                             @[@(imgIdCornerLeft), imgEventCornerLeft],
+                                                             @[@(imgIdCornerRight), imgEventCornerRight]]];
 
         // Get IP from defaults
         NSString *ipStr = [[NSUserDefaults standardUserDefaults] stringForKey:@"IP_preference"];
@@ -264,12 +278,6 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
     if ([[SDLHMILevel FULL] isEqualToEnum:notification.hmiLevel]) {
         NSLog(@"HMIStatus = FULL");
         
-        if (self.isFirstHmiFull) {
-            self.firstHmiFull = NO;
-            
-            [self hsdl_performWelcomeMessage];
-        }
-        
         [self hsdl_subscribeVehicleData];
         
         BOOL uploadImages = NO;
@@ -313,10 +321,12 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
  */
 - (void)hsdl_performWelcomeMessage {
     NSLog(@"Send welcome message");
+    SDLImage *driveSafeImg = [self sdlImgByName:imgDriveSafeGreen];
     SDLShow *show = [[SDLShow alloc] init];
     show.mainField1 = WelcomeShow;
     show.alignment = [SDLTextAlignment CENTERED];
     show.correlationID = [self hsdl_getNextCorrelationId];
+    show.graphic = driveSafeImg;
     [self.proxy sendRPC:show];
 
     SDLSpeak *speak = [SDLRPCRequestFactory buildSpeakWithTTS:WelcomeSpeak correlationID:[self hsdl_getNextCorrelationId]];
@@ -354,7 +364,6 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
 - (void)onListFilesResponse:(SDLListFilesResponse *)response {
     NSLog(@"ListFiles response from SDL: %@ with info: %@", response.resultCode, response.info);
 
-    // If the ListFiles was successful, store the list in a mutable set
     if (response.success) {
         for (NSString *filename in response.filenames) {
             [self.remoteImages addObject:filename];
@@ -370,27 +379,6 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
         // If the file is already present, send the SetAppIcon request
         [self hsdl_setAppIcon];
     }
-    
-    // Other images (for Show, etc.) could be added here
-    
-
-    // DELETE FROM HERE
-//    NSLog(@"Uploading Test Img");
-//    //        [self hsdl_uploadImage:PruebitaImgFilename withCorrelationID:@(PruebitaImgId)];
-//    if ([self conditionalUpload:PruebitaImgFilename existingFiles:self.remoteImages correlationID:@(PruebitaImgId)]) {
-//        NSLog(@"uploading EMTPY Img");
-//        //    [self hsdl_uploadImage:@"emptyImg" withCorrelationID:@(4321234)];
-//        [self conditionalUpload:@"emptyImg" existingFiles:self.remoteImages correlationID:@(emptyImgId)];
-//        
-//        
-//        NSLog(@"Uploading events images");
-//        [self conditionalUpload:imgEventAxl existingFiles:self.remoteImages correlationID:@(axlImgId)];
-//        [self conditionalUpload:imgEventBrake existingFiles:self.remoteImages correlationID:@(brakeImgId)];
-//        [self conditionalUpload:imgEventCornerLeft existingFiles:self.remoteImages correlationID:@(cornerLeftImgId)];
-//        [self conditionalUpload:imgEventCornerRight existingFiles:self.remoteImages correlationID:@(cornerRightImgId)];
-    // DELETE TO HERE
-
-    //    }
 }
 
 - (void) uploadImageFromQueue {
@@ -477,22 +465,32 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
         BOOL pop = YES;
         
         switch (imgId) {
-            case PruebitaImgId:
-                imgName = @"Pruebita";
+            case imgIdDriveSafe: {
+                imgName = @"DriveSafeGreen";
+                
+                if (self.isFirstHmiFull) {
+                    self.firstHmiFull = NO;
+                    
+                    [self hsdl_performWelcomeMessage];
+                }
+            }
                 break;
-            case axlImgId:
+            case imgIdDrivingGreen:
+                imgName = @"DrivingGreen";
+                break;
+            case imgIdAxl:
                 imgName = @"Acceleration event";
                 break;
-            case brakeImgId:
+            case imgIdBrake:
                 imgName = @"Brake event";
                 break;
-            case cornerRightImgId:
+            case imgIdCornerRight:
                 imgName = @"Corner Right event";
                 break;
-            case cornerLeftImgId:
+            case imgIdCornerLeft:
                 imgName = @"Corner Left event";
                 break;
-            case emptyImgId:
+            case imgIdEmpty:
                 imgName = @"EMPTY img";
                 break;
             case AppIconIdInt:
@@ -600,15 +598,13 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
         SDLSpeak *speak = [SDLRPCRequestFactory buildSpeakWithTTS:@"Test Command" correlationID:[self hsdl_getNextCorrelationId]];
         [self.proxy sendRPC:speak];
     } else if ([notification.cmdID isEqual:@(BeginDriveCommandID)]) {
-        SDLImage *pruebitaImg = [[SDLImage alloc] init];
-        pruebitaImg.value = PruebitaImgFilename;
-        pruebitaImg.imageType = SDLImageType.DYNAMIC;
+        SDLImage *DrivingGreenImg = [self sdlImgByName:imgDrivingGreenImgFilename];
         
         SDLShow *show = [[SDLShow alloc] init];
         show.mainField1 = @"Starting Trip";
         show.mainField2 = @"Drive Save,  Enjoy your drive";
-        NSLog(@"Adding Pruebita IMAGE");
-        show.graphic = pruebitaImg;
+        NSLog(@"Adding DrivingGreen IMAGE");
+        show.graphic = DrivingGreenImg;
         show.statusBar = @"Uh - Statusbar";
         show.alignment = [SDLTextAlignment CENTERED];
         show.correlationID = [self hsdl_getNextCorrelationId];
@@ -619,7 +615,7 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
 //            showBye.mainField2 = @"";
 //            showBye.statusBar = @"Bye Status Bar";
 //            
-//            NSLog(@"BYE BYE pruebita");
+//            NSLog(@"BYE BYE DrivingGreen");
 //            showBye.correlationID = [self hsdl_getNextCorrelationId];
 //            [self.proxy sendRPC:showBye];
 //            
@@ -631,7 +627,7 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
 //
 //            
 //            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(4 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-                NSLog(@"BYE BYE pruebita");
+                NSLog(@"BYE BYE DrivingGreen");
                 [self testAlert];
                 [self clearDisplay];
 //            });
@@ -640,8 +636,8 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
         
 //        NSLog(@"SHOWING THE IMAGE???");
 //        SDLShow *imgShow = [[SDLShow alloc] init];
-//        imgShow.graphic = pruebitaImg;
-//        imgShow.correlationID = @(PruebitaImgId);
+//        imgShow.graphic = DrivingGreenImg;
+//        imgShow.correlationID = @(DrivingGreenImgId);
 //        [self.proxy sendRPC:imgShow];
 //        NSLog(@"SHOWED THE IMAGE???");
         
@@ -660,9 +656,7 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
     testAlert.playTone = @(YES);
     
     SDLSoftButton *sftBtn = [[SDLSoftButton alloc] init];
-    SDLImage *btnIng = [[SDLImage alloc] init];
-    btnIng.value = @"event_axl";
-    btnIng.imageType = SDLImageType.DYNAMIC;
+    SDLImage *btnIng = [self sdlImgByName:imgEventAxl];
     sftBtn.image = btnIng;
     sftBtn.type = [SDLSoftButtonType IMAGE];
     sftBtn.isHighlighted = @(NO);
@@ -674,6 +668,14 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
     [self.proxy sendRPC:testAlert];
 }
 
+- (SDLImage*) sdlImgByName : (NSString *) name {
+    SDLImage *sdlImg = [[SDLImage alloc] init];
+    sdlImg.value = name;
+    sdlImg.imageType = SDLImageType.DYNAMIC;
+   
+    return sdlImg;
+}
+
 - (void) clearDisplay {
     SDLShow *showNothing = [[SDLShow alloc] init];
     showNothing.mainField1 = @"";
@@ -683,9 +685,8 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
     
 //    [self addStandardButtonsToShow:showNothing];
     
-    SDLImage *emptyImg = [[SDLImage alloc] init];
-    emptyImg.value = @"emptyImg";
-    emptyImg.imageType = SDLImageType.DYNAMIC;
+    SDLImage *emptyImg = [self sdlImgByName:@"emptyImg"];
+
     showNothing.graphic = emptyImg;
 
     NSLog(@"Clearing display");
@@ -713,16 +714,14 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
 }
 
 
-#pragma mark GreenRoad events
+#pragma mark - GreenRoad events
 
 - (void) sendEventToSDLWithImage : (NSString*) imageName eventName : (NSString*) eventName {
     SDLShow *show = [[SDLShow alloc] init];
 
     if (nil != imageName) {
-        SDLImage *pruebitaImg = [[SDLImage alloc] init];
-        pruebitaImg.value = imageName;
-        pruebitaImg.imageType = SDLImageType.DYNAMIC;
-        show.graphic = pruebitaImg;
+        SDLImage *DrivingGreenImg = [self sdlImgByName:imageName];
+        show.graphic = DrivingGreenImg;
     }
     
     show.mainField1 = eventName;
@@ -782,6 +781,31 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
 }
 
 
+
+#pragma mark GreenRoad States
+
+- (void) beginTrip {
+    if (!self.tripStarted) {
+        self.tripStarted = YES;
+        NSLog(@"Begin Trip");
+        
+        SDLImage *sdlImgDriving = [self sdlImgByName:imgDrivingGreenImgFilename];
+        SDLShow *show = [[SDLShow alloc] init];
+        show.mainField1 = strBeginTripText;
+        show.alignment = [SDLTextAlignment CENTERED];
+        show.correlationID = [self hsdl_getNextCorrelationId];
+        show.graphic = sdlImgDriving;
+        [self.proxy sendRPC:show];
+        
+        SDLSpeak *speak = [SDLRPCRequestFactory buildSpeakWithTTS:strBeginTripVoice correlationID:[self hsdl_getNextCorrelationId]];
+        [self.proxy sendRPC:speak];
+    }
+
+}
+
+
+
+
 #pragma mark VehicleData
 
 // vehicle data Area
@@ -801,10 +825,6 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
             }
         }
     }
-}
-
-- (void) beginTrip {
-    NSLog(@"Begin Trip");
 }
 
 
