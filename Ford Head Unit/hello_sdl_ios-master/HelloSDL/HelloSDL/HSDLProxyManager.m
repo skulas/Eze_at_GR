@@ -56,14 +56,15 @@ static NSString *const strCorneringText = @"Cornering";
 static NSString *const strCorneringVoice = @"Cornering";
 static NSString *const strBrakingText = @"Braking";
 static NSString *const strBrakingVoice = @"Braking";
-static NSString *const strAxlerating1Text = @"Ease the acceleration for a greener trip";
-static NSString *const strAxlerating2Text = @"next time cosider pushing the pedal half way";
+static NSString *const strAxlerating1Text = @"Accelerating";
+static NSString *const strAxlerating2Text = @"Think about the environment";
 static NSString *const strAxleratingVoice = @"Acceleration";
-static NSString *const strLaneEvent1Text = @"Lane event";
-static NSString *const strLaneEventVoice = @"Lane event";
+static NSString *const strLaneEvent1Text = @"Lane Crossing";
+static NSString *const strLaneEventVoice = @"Lane Warning";
 static NSString *const strCoffeeText = @"Stop For A Coffee";
 static NSString *const strCoffeeCouponText = @"coupon on us ...";
-static NSString *const strCoffeeVoice = @"Time for cofeebrake, we invite";
+static NSString *const strCoffeeVoice1 = @"Time for cofee brake";
+static NSString *const strCoffeeVoice2 = @"Let us invite you.";
 
 // Test Alert
 static const NSUInteger TestAlertButtonID = 0xB52;
@@ -1001,7 +1002,16 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
     
     [self.proxy sendRPC:show];
     
-    SDLSpeak *speak = [SDLRPCRequestFactory buildSpeakWithTTS:strCoffeeVoice correlationID:[self hsdl_getNextCorrelationId]];
+    
+//    SDLSpeak *speak = [SDLRPCRequestFactory buildSpeakWithTTS:strCoffeeVoice correlationID:[self hsdl_getNextCorrelationId]];
+    SDLTTSChunk *coffeeChunk1 = [[SDLTTSChunk alloc] init];
+    coffeeChunk1.text = strCoffeeVoice1;
+    coffeeChunk1.type = SDLSpeechCapabilities.TEXT;
+    SDLTTSChunk *coffeeChunk2 = [[SDLTTSChunk alloc] init];
+    coffeeChunk2.text = strCoffeeVoice2;
+    coffeeChunk2.type = SDLSpeechCapabilities.TEXT;
+
+    SDLSpeak *speak = [SDLRPCRequestFactory buildSpeakWithTTSChunks:@[coffeeChunk1, coffeeChunk2] correlationID:[self hsdl_getNextCorrelationId]];
     [self.proxy sendRPC:speak];
     
     self.strStickyFirstLine = strLaneEvent1Text;
