@@ -171,7 +171,7 @@ static const double resolution = 2.0; // Use Natural numbers. Using double for p
             }
             
             dispatch_async(self.calculations_queue, ^{
-                [weakSelf updateGWithX:accelerometerData.acceleration.x
+                [self updateGWithX:accelerometerData.acceleration.x
                                      y:accelerometerData.acceleration.y
                                      z:accelerometerData.acceleration.z];
             });
@@ -380,8 +380,8 @@ static const double resolution = 2.0; // Use Natural numbers. Using double for p
             });
         } else {
             GRVector newCopy = gInVec;
+            GRVector fixed = [[GRAccelerometerOffsetDetector sharedDetector] getFixedVectorWithG:newCopy];
             dispatch_async(dispatch_get_main_queue(), ^{
-                GRVector fixed = [[GRAccelerometerOffsetDetector sharedDetector] getFixedVectorWithG:newCopy];
 
                 [self setLabelValueX:x y:y z:z];
 
