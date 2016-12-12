@@ -16,6 +16,7 @@
 		7C2D5AF81BC31598002FE9CE /* LockScreenViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 7C2D5AF71BC31598002FE9CE /* LockScreenViewController.m */; };
 		7C2D5AFC1BC31D21002FE9CE /* HSDLProxyManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 7C2D5AFB1BC31D21002FE9CE /* HSDLProxyManager.m */; };
 		8A7C7C80D460922944D23A54 /* Pods_HelloSDL.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 074A37D1F9B20833116BBEF5 /* Pods_HelloSDL.framework */; };
+		A1BE37B81DFEB75400573416 /* car_axl.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = A1BE37B71DFEB75400573416 /* car_axl.mp3 */; };
 		A1EDFA761DDDE26000C673A0 /* Settings.bundle in Resources */ = {isa = PBXBuildFile; fileRef = A1EDFA751DDDE26000C673A0 /* Settings.bundle */; };
 		A1EDFA791DDE040B00C673A0 /* GREventsGenerator.m in Sources */ = {isa = PBXBuildFile; fileRef = A1EDFA781DDE040B00C673A0 /* GREventsGenerator.m */; };
 /* End PBXBuildFile section */
@@ -37,6 +38,7 @@
 		7C2D5AF71BC31598002FE9CE /* LockScreenViewController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = LockScreenViewController.m; sourceTree = "<group>"; };
 		7C2D5AFA1BC31D19002FE9CE /* HSDLProxyManager.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = HSDLProxyManager.h; sourceTree = "<group>"; };
 		7C2D5AFB1BC31D21002FE9CE /* HSDLProxyManager.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = HSDLProxyManager.m; sourceTree = "<group>"; };
+		A1BE37B71DFEB75400573416 /* car_axl.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = car_axl.mp3; sourceTree = "<group>"; };
 		A1EDFA751DDDE26000C673A0 /* Settings.bundle */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.plug-in"; path = Settings.bundle; sourceTree = "<group>"; };
 		A1EDFA771DDE040B00C673A0 /* GREventsGenerator.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = GREventsGenerator.h; sourceTree = "<group>"; };
 		A1EDFA781DDE040B00C673A0 /* GREventsGenerator.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = GREventsGenerator.m; sourceTree = "<group>"; };
@@ -77,6 +79,7 @@
 		7C2D5ADD1BC30F4C002FE9CE /* HelloSDL */ = {
 			isa = PBXGroup;
 			children = (
+				A1BE37B71DFEB75400573416 /* car_axl.mp3 */,
 				7C2D5AE11BC30F4C002FE9CE /* AppDelegate.h */,
 				7C2D5AE21BC30F4C002FE9CE /* AppDelegate.m */,
 				7C2D5AF51BC3156D002FE9CE /* Views */,
@@ -202,6 +205,7 @@
 				7C2D5AEE1BC30F4C002FE9CE /* LaunchScreen.storyboard in Resources */,
 				7C2D5AEB1BC30F4C002FE9CE /* Assets.xcassets in Resources */,
 				7C2D5AE91BC30F4C002FE9CE /* Main.storyboard in Resources */,
+				A1BE37B81DFEB75400573416 /* car_axl.mp3 in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

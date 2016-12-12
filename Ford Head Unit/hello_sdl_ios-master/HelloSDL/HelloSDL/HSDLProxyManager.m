@@ -85,6 +85,7 @@ static NSString *const imgCorneringGreen = @"CorneringGreen";
 static NSString *const imgBrakingYellow = @"BrakingYellow";
 static NSString *const imgAxlratingYellow = @"AxleratingYellow";
 static NSString *const imgLaneHandlingRed = @"LaneHandlingRed";
+static NSString *const sndFxAxleration = @"car_axl";
 
 static const int imgIdDrivingGreen = 15894239;
 static const int imgIdDrivingYellow = 15894240;
@@ -99,6 +100,7 @@ static const int imgIdCorneringGreen = 0x5AD0;
 static const int imgIdBrakingYellow = 0xBAD1;
 static const int imgIdAxlratingYellow = 0xBAD2;
 static const int imgIdLaneHandlingRed = 0xBAD3;
+static const int sndFxIdAxleration = 0x5FF0;
 
 
 static const int scoreButtonId = 0xB077;
@@ -450,7 +452,21 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
             [self uploadImageFromQueue];
         }
     } else {
-        NSLog(@"Upload QUEUE depleted");
+        NSLog(@"Upload QUEUE depleted, NOT uploading SOUND - Uncomment for sound upload.");
+//        NSString *axl_mp3 = [[NSBundle mainBundle] pathForResource:sndFxAxleration ofType:@"mp3"];
+//        NSData *axl_mp3_data = [NSData dataWithContentsOfFile:axl_mp3];
+//        
+//        SDLPutFile *putFile = [[SDLPutFile alloc] init];
+//        putFile.syncFileName = sndFxAxleration;
+//        putFile.fileType = [SDLFileType AUDIO_MP3];
+//        putFile.persistentFile = @YES;
+//        putFile.systemFile = @NO;
+//        putFile.offset = @0;
+//        putFile.length = [NSNumber numberWithUnsignedLong:axl_mp3_data.length];
+//        putFile.bulkData = axl_mp3_data;
+//        putFile.correlationID = @(sndFxIdAxleration);
+//        
+//        [self.proxy sendRPC:putFile];
     }
 }
 
@@ -573,6 +589,9 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
                 imgName = @"App Icon";
                 pop = NO;
                 break;
+            case sndFxIdAxleration:
+                imgName = @"Sound FX for AXL";
+                break;
             default:
                 pop = NO;
                 break;
@@ -587,7 +606,10 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
         if (pop) {
             [self.uploadsQueue removeLastObject];
         }
-        [self uploadImageFromQueue];
+        
+        if (imgId != sndFxIdAxleration) {
+            [self uploadImageFromQueue];
+        }
 
     } else {
         NSArray *pop = [self.uploadsQueue lastObject];
@@ -955,9 +977,22 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
         show.correlationID = [self hsdl_getNextCorrelationId];
         show.graphic = sdlImgAxlerating;
         [self.proxy sendRPC:show];
-        
+
+        // AXL Talk
         SDLSpeak *speak = [SDLRPCRequestFactory buildSpeakWithTTS:strAxleratingVoice correlationID:[self hsdl_getNextCorrelationId]];
         [self.proxy sendRPC:speak];
+        
+//        
+//        SDLSpeak *axlAxlSFX = [[SDLSpeak alloc] init];
+//        SDLTTSChunk *simpleChunk = [[SDLTTSChunk alloc] init];
+//        simpleChunk.text = sndFxAxleration;
+//        simpleChunk.type = [SDLSpeechCapabilities PRE_RECORDED];
+//        NSArray *ttsChunks = [NSMutableArray arrayWithObject:simpleChunk];
+//        axlAxlSFX.correlationID = [self hsdl_getNextCorrelationId];
+//        axlAxlSFX.ttsChunks = [ttsChunks mutableCopy];
+//        
+//        [self.proxy sendRPC:axlAxlSFX];
+    
         
         self.strStickyFirstLine = strBrakingText;
         self.sdlImgCurrentImage = sdlImgAxlerating;
