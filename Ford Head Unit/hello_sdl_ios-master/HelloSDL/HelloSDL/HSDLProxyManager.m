@@ -252,6 +252,7 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
  *  Delegate method that runs on disconnect from SDL.
  */
 - (void)onProxyClosed {
+    static BOOL restartPending = NO;
     NSLog(@"SDL Disconnect");
 
     // Reset state variables
@@ -265,9 +266,19 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
     // Notify the app delegate to clear the lockscreen
     [self hsdl_postNotification:HSDLDisconnectNotification info:nil];
 
-    // Cycle the proxy
-    [self disposeProxy];
-    [self startProxy];
+    
+    if (!restartPending) {
+        restartPending = YES;
+        
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            NSLog(@"Recycling proxy");
+            restartPending = NO;
+            // Cycle the proxy
+            [self disposeProxy];
+            [self startProxy];
+        });
+    }
+    
 }
 
 /**
@@ -981,10 +992,10 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
     }
 }
 
-- (void) cofeeBreak {
+- (void) coffeeBreak {
     SDLShow *show = [[SDLShow alloc] init];
     show.mainField1 = strCoffeeText;
-    show.mainField3 = strCoffeeCouponText;
+    show.mainField2 = strCoffeeCouponText;
     show.alignment = [SDLTextAlignment LEFT_ALIGNED];
     show.correlationID = [self hsdl_getNextCorrelationId];
     
@@ -995,6 +1006,7 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
     
     self.strStickyFirstLine = strLaneEvent1Text;
     self.sdlImgCurrentImage = [self sdlImgByName:imgDrivingRedImgFilename];
+    [[NSNotificationCenter defaultCenter] postNotificationName:kCoffeeMessage object:self];
 }
 
 - (void) resetToDriving : (int) level {
@@ -1021,7 +1033,7 @@ NSString *const HSDLNotificationUserInfoObject = @"com.sdl.notification.keys.sdl
             imgName = imgDrivingRedImgFilename;
             whatToDoNext = ^void() {
                 NSLog(@"Back from wheel event");
-                [self cofeeBreak];
+                [self coffeeBreak];
             };
         }
             break;

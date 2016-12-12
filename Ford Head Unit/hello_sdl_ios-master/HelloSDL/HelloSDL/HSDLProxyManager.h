@@ -10,6 +10,8 @@ extern NSString *const HSDLDisconnectNotification;
 extern NSString *const HSDLLockScreenStatusNotification;
 extern NSString *const HSDLNotificationUserInfoObject;
 
+static NSString *const kCoffeeMessage = @"CoffeeBreak";
+
 @interface HSDLProxyManager : NSObject
 
 + (instancetype)manager;

@@ -35,15 +35,25 @@
                                 <color key="textColor" red="0.0" green="0.0" blue="0.0" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                                 <nil key="highlightedColor"/>
                             </label>
+                            <imageView hidden="YES" opaque="NO" clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="scaleAspectFit" image="Coffee" translatesAutoresizingMaskIntoConstraints="NO" id="eLg-iY-gAo">
+                                <rect key="frame" x="0.0" y="0.0" width="320" height="568"/>
+                            </imageView>
                         </subviews>
                         <color key="backgroundColor" red="1" green="1" blue="1" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                         <constraints>
                             <constraint firstItem="nqD-Cg-Nzw" firstAttribute="centerX" secondItem="8bC-Xf-vdC" secondAttribute="centerX" id="FfC-sF-tog"/>
+                            <constraint firstItem="eLg-iY-gAo" firstAttribute="centerX" secondItem="8bC-Xf-vdC" secondAttribute="centerX" id="HFL-Yv-rRg"/>
+                            <constraint firstItem="eLg-iY-gAo" firstAttribute="width" secondItem="8bC-Xf-vdC" secondAttribute="width" id="RNz-a5-d8o"/>
+                            <constraint firstItem="eLg-iY-gAo" firstAttribute="centerY" secondItem="8bC-Xf-vdC" secondAttribute="centerY" id="d4W-oH-hu4"/>
                             <constraint firstItem="M1X-R1-KlX" firstAttribute="centerY" secondItem="8bC-Xf-vdC" secondAttribute="centerY" multiplier="1.2" id="hNe-S1-WS9"/>
                             <constraint firstItem="M1X-R1-KlX" firstAttribute="centerX" secondItem="8bC-Xf-vdC" secondAttribute="centerX" id="nsf-w3-rNT"/>
+                            <constraint firstItem="eLg-iY-gAo" firstAttribute="height" secondItem="8bC-Xf-vdC" secondAttribute="height" id="vk7-io-YIk"/>
                             <constraint firstItem="nqD-Cg-Nzw" firstAttribute="centerY" secondItem="8bC-Xf-vdC" secondAttribute="centerY" multiplier="0.8" id="xjI-2h-Fr4"/>
                         </constraints>
                     </view>
+                    <connections>
+                        <outlet property="imgCoffeeCoupon" destination="eLg-iY-gAo" id="kN5-fh-QOx"/>
+                    </connections>
                 </viewController>
                 <placeholder placeholderIdentifier="IBFirstResponder" id="dkx-z0-nzr" sceneMemberID="firstResponder"/>
             </objects>
@@ -122,6 +132,7 @@
         </scene>
     </scenes>
     <resources>
+        <image name="Coffee" width="176" height="225"/>
         <image name="ford_logo" width="1000" height="382"/>
         <image name="green_road_logo" width="150" height="150"/>
     </resources>
