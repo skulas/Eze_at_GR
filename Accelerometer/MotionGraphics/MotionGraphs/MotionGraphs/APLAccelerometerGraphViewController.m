@@ -281,7 +281,7 @@ static const double resolution = 2.0; // Use Natural numbers. Using double for p
     
     
     if ( (gVecModule < low_g_thres) || (hig_g_thres < gVecModule) ) {
-        NSLog(@"Strong force detected, skipping sample");
+//        NSLog(@"Strong force detected, skipping sample");
         return;
     }
     

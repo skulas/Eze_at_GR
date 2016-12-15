@@ -27,10 +27,16 @@ typedef NS_ENUM(NSInteger, GRWorkMode) {
 
 #pragma mark Constants
 
+// Minimal number of samples to start using the average of samples
+static const int kMinNumberOfSamples = 300; // after 3 seconds at 25 samples per second.
+
 // number of areas to split each of the 4 quadrants
 // 2: 0<|x|<0.5 or 0.5<|x|<1
 static const int kSliceResolution = 2;
-
+static const int kNumberOfQuadrantsInSpace = 4;
+static const int kNumberOfSpacePlanes = 3;
+static const int kNumberOfSlices = kSliceResolution * kNumberOfQuadrantsInSpace;
+static const int kNumberOfSectors = kNumberOfSpacePlanes * kNumberOfSlices;
 
 /*
  Any sample of G vector that the module of the vector (the size) exeeds these limits
@@ -38,8 +44,13 @@ static const int kSliceResolution = 2;
  NOTE:
  If an accelerometer has an offset bigger than these values the detection will truncate the offset value.
  */
-static const double kLowGThreshold = 0.9;
-static const double kHighGThreshold = 1.1;
+static const double kLowGThresFirstValue = 0.9;
+static const double kHighGThresFirstValue = 1.1;
+
+static double _lowGThreshold = kLowGThresFirstValue;
+static double _highGThreshold = kHighGThresFirstValue;
+static long _thresholdRefreshSamplesCounter = 0;
+static long kNumberOfSamplesToRefreshThreshold = 200; // 2 seconds at 25 samples per second
 
 
 
@@ -115,9 +126,6 @@ static const double kHighGThreshold = 1.1;
 
 - (instancetype) init:(int)flagToMakeItPrivate {
     if (self = [super init]) {
-        int kNumberOfQuadrantsInSpace = 4;
-        int kNumberOfSlices = kSliceResolution * kNumberOfQuadrantsInSpace;
-        
         self.arr_xyoffsets = [NSMutableArray arrayWithCapacity:kNumberOfSlices];
         self.arr_xyCounters = [NSMutableArray arrayWithCapacity:kNumberOfSlices];
         self.arr_xzoffsets = [NSMutableArray arrayWithCapacity:kNumberOfSlices];
@@ -149,6 +157,12 @@ static const double kHighGThreshold = 1.1;
     return result;
 }
 
+- (double) choseBestOptionA : (double) optA optionB : (double) optB {
+    double choice = fabs(optB) > fabs(optA) ? optB : optA;
+    
+    return choice;
+}
+
 - (int) sliceIndexInPlane : (double) theta {
     int q_found = -1;
     static double sliceSize = M_PI_2 / kSliceResolution;
@@ -173,8 +187,6 @@ static const double kHighGThreshold = 1.1;
     int kNumberOfQuadrantsToScan = 2;
     int kNumberOfSlicesToCheck = kNumberOfQuadrantsToScan * rndResolution;
     for (int q_ix = 1; q_ix < kNumberOfSlicesToCheck; q_ix++) {
-        
-        
         if (fixedTheta < currSliceTopLimit) {
             q_found = q_ix - 1;
             break;
@@ -294,12 +306,13 @@ static const double kHighGThreshold = 1.1;
 - (Point3D*) action:(GRWorkMode)action WithX:(double)x y:(double)y z:(double)z {
     double gVecModule = sqrt(pow(x, 2)+pow(y, 2)+pow(z, 2));
     Point3D* result = nil;
+    
+    
     //
     // If values exceed some logical threshold ignore the sample
     //
     
-    if ( (action == GRWorkModeInserValue) && ( (gVecModule < kLowGThreshold) || (kHighGThreshold < gVecModule) ) ) {
-        NSLog(@"Strong force detected, skipping sample");
+    if ( (action == GRWorkModeInserValue) && ( (gVecModule < _lowGThreshold) || (_highGThreshold < gVecModule) ) ) {
         return result;
     }
     
@@ -338,11 +351,6 @@ static const double kHighGThreshold = 1.1;
     double oneY = sin_phi * sin(theta_xy);
     double oneZ = cos(phi);
     
-    // Calculate the offset for each component from the ideal unit vector
-    Point3D *Unit_minus_actual = [[Point3D alloc] init];
-    Unit_minus_actual.x = oneX - x;
-    Unit_minus_actual.y = oneY - y;
-    Unit_minus_actual.z = oneZ - z;
 
     // Find G quadrant for each plane
     int xyQuadrant = [self sliceIndexInPlane:theta_xy];
@@ -350,12 +358,25 @@ static const double kHighGThreshold = 1.1;
     int yzQuadrant = [self sliceIndexInPlane:theta_yz];
 
     if (action == GRWorkModeInserValue) {
+        // Calculate the offset for each component from the ideal unit vector
+        Point3D *Unit_minus_actual = [[Point3D alloc] init];
+        Unit_minus_actual.x = oneX - x;
+        Unit_minus_actual.y = oneY - y;
+        Unit_minus_actual.z = oneZ - z;
+
         // Add a sample to each average according to
         [self updateAvgSpaceSelect:GRPlaneXY newPoint:Unit_minus_actual quadrantSliceIx:xyQuadrant];
         [self updateAvgSpaceSelect:GRPlaneZX newPoint:Unit_minus_actual quadrantSliceIx:zxQuadrant];
         [self updateAvgSpaceSelect:GRPlaneYZ newPoint:Unit_minus_actual quadrantSliceIx:yzQuadrant];
+        
+        // Update Threshoulds
+        if (_thresholdRefreshSamplesCounter > kNumberOfSamplesToRefreshThreshold) {
+            _thresholdRefreshSamplesCounter = 0;
+            [self refreshThresholds];
+        }
+        _thresholdRefreshSamplesCounter++;
+        
     } else {
-        static const int kMinNumberOfSamples = 1000;
         double offsetX = 0.0, offsetY = 0.0, offsetZ = 0.0;
         Point3D *currVal = [Point3D Zeroes];
         long currCounter = [self readAvgSpaceSelect:GRPlaneXY outputPoint:currVal quadrantSliceIx:xyQuadrant];
@@ -370,15 +391,15 @@ static const double kHighGThreshold = 1.1;
         
         if (currCounter > kMinNumberOfSamples) {
             offsetZ = currVal.z;
-            offsetY = fabs(currVal.y) > fabs(offsetY) ? currVal.y : offsetY; // Use the biggest offset.
+            offsetY = [self choseBestOptionA:currVal.y optionB:offsetY];
         }
         
         currVal = [Point3D Zeroes];
         currCounter = [self readAvgSpaceSelect:GRPlaneZX outputPoint:currVal quadrantSliceIx:zxQuadrant];
         
         if (currCounter > kMinNumberOfSamples) {
-            offsetZ = fabs(currVal.z) > fabs(offsetZ) ? currVal.z : offsetZ; // Use the biggest offset.
-            offsetX = fabs(currVal.x) > fabs(offsetX) ? currVal.x : offsetX; // Use the biggest offset.
+            offsetZ = [self choseBestOptionA:offsetZ optionB:currVal.z];
+            offsetX = [self choseBestOptionA:currVal.x optionB:offsetX];
         }
         
         result = [[Point3D alloc] init];
@@ -390,6 +411,80 @@ static const double kHighGThreshold = 1.1;
     return result;
 }
 
+- (void) refreshThresholds {
+    double currentUpperThrsDelta = _highGThreshold - 1; // Always positive
+    double currentLowerThrsDelta = _lowGThreshold - 1; // Always negative
+    double possitiveOffsetsAvg = 0;
+    double negativeOffsetsAvg = 0;
+    
+    for (int sliceIx = 0; sliceIx < kNumberOfSlices; sliceIx++) {
+        double xFix = -100.0, yFix = -100.0, zFix = -100.0;
+        
+        // XY
+        long currCounter = [self.arr_xyCounters[sliceIx] longValue];
+        
+        if (currCounter > kMinNumberOfSamples) {
+            Point3D *xyPoint = self.arr_xyoffsets[sliceIx];
+            xFix = xyPoint.x;
+            yFix = xyPoint.y;
+        }
+        
+        
+        // YZ
+        currCounter = [self.arr_zyCounters[sliceIx] longValue];
+        
+        if (currCounter > kMinNumberOfSamples) {
+            Point3D *zyPoint = self.arr_zyoffsets[sliceIx];
+            yFix = [self choseBestOptionA:yFix optionB:zyPoint.y];
+            zFix = zyPoint.z;
+        }
+        
+        
+        // XZ
+        currCounter = [self.arr_xzCounters[sliceIx] longValue];
+        
+        if (currCounter > kMinNumberOfSamples) {
+            Point3D *xzPoint = self.arr_xzoffsets[sliceIx];
+            xFix = [self choseBestOptionA:xFix optionB:xzPoint.x];
+            zFix = [self choseBestOptionA:zFix optionB:xzPoint.z];
+        }
+        
+        NSLog(@"xfix = %.4f, yfix = %.4f, zfix = %.4f", xFix, yFix, zFix);
+        [self updatePosAvg:&possitiveOffsetsAvg andNegPos:&negativeOffsetsAvg withFix:xFix currUp:currentUpperThrsDelta currLow:currentLowerThrsDelta];
+        [self updatePosAvg:&possitiveOffsetsAvg andNegPos:&negativeOffsetsAvg withFix:yFix currUp:currentUpperThrsDelta currLow:currentLowerThrsDelta];
+        [self updatePosAvg:&possitiveOffsetsAvg andNegPos:&negativeOffsetsAvg withFix:zFix currUp:currentUpperThrsDelta currLow:currentLowerThrsDelta];
+    }
+    
+    
+//    NSLog(@"Upper delta before: %.4f", currentUpperThrsDelta);
+    currentUpperThrsDelta = (currentUpperThrsDelta + possitiveOffsetsAvg) / 2;
+    _highGThreshold = 1 + currentUpperThrsDelta;
+//    NSLog(@"Upper delta after: %.4f", currentUpperThrsDelta);
+    
+//    NSLog(@"Lower delta before: %.4f", currentLowerThrsDelta);
+    currentLowerThrsDelta = (currentLowerThrsDelta + negativeOffsetsAvg) / 2;
+    _lowGThreshold = 1 + currentLowerThrsDelta;
+    //    NSLog(@"Lower delta after: %.4f", currentLowerThrsDelta);
+//    NSLog(@"Lower delta after: %.4f", currentLowerThrsDelta);
+    
+//    NSLog(@"Updated Up Thr: %.3f --- Low Thr: %.3f", _highGThreshold, _lowGThreshold);
+}
+
+- (void) updatePosAvg : (double*) possitiveAvg andNegPos : (double*) negAvg withFix : (double) fix currUp : (double) currentUpperThrsDelta currLow : (double) currentLowerThrsDelta {
+    static double defaultLowValue = (kLowGThresFirstValue - 1.0) / kNumberOfSectors;
+    static double defaultHighValue = (kHighGThresFirstValue - 1.0) / kNumberOfSectors;
+    
+    if (fix < -90) { // Detect there's no value. Conserve current value
+        *possitiveAvg += defaultHighValue;
+        *negAvg += defaultLowValue;
+    } else if (fix > 0) {
+        *possitiveAvg += fix / kNumberOfSectors;
+//        *negAvg += defaultLowValue;
+    } else if (fix < 0) {
+//        *possitiveAvg += defaultHighValue;
+        *negAvg += fix / kNumberOfSectors;
+    }
+}
 
 #pragma mark - Interface
 
