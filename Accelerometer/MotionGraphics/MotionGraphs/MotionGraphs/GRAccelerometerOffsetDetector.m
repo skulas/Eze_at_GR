@@ -44,7 +44,7 @@ static const int kSliceResolution = 2;
 static const int kNumberOfQuadrantsInSpace = 4;
 static const int kNumberOfSpacePlanes = 3;
 static const int kNumberOfSlices = kSliceResolution * kNumberOfQuadrantsInSpace;
-static const int kNumberOfAxisParts = 2 * kSliceResolution;
+//static const int kNumberOfAxisParts = 2 * kSliceResolution;
 static const int kNumberOfSectors = kNumberOfSpacePlanes * kNumberOfSlices;
 //static const int kNumberOfSectorsForEachAxis = 2 * kNumberOfSlices;
 
@@ -61,7 +61,7 @@ static double _lowGThreshold = kLowGThresFirstValue;
 static double _highGThreshold = kHighGThresFirstValue;
 static long _thresholdRefreshSamplesCounter = 0;
 static long kNumberOfSamplesToRefreshThreshold = 200; // 2 seconds at 25 samples per second
-static const long kMaxNumberOfSamplesForRegression = 2000;
+static const long kMaxNumberOfSamplesForRegression = 3000;
 
 
 
@@ -225,9 +225,9 @@ static const long kMaxNumberOfSamplesForRegression = 2000;
         self.arr_xzCounters = [NSMutableArray arrayWithCapacity:kNumberOfSlices];
         self.arr_zyoffsets = [NSMutableArray arrayWithCapacity:kNumberOfSlices];
         self.arr_zyCounters = [NSMutableArray arrayWithCapacity:kNumberOfSlices];
-        NSMutableArray *xArr = [[NSMutableArray alloc] initWithCapacity:kNumberOfAxisParts];
-        NSMutableArray *yArr = [[NSMutableArray alloc] initWithCapacity:kNumberOfAxisParts];
-        NSMutableArray *zArr = [[NSMutableArray alloc] initWithCapacity:kNumberOfAxisParts];
+        NSMutableArray *xArr = [[NSMutableArray alloc] initWithCapacity:kNumberOfSlices];
+        NSMutableArray *yArr = [[NSMutableArray alloc] initWithCapacity:kNumberOfSlices];
+        NSMutableArray *zArr = [[NSMutableArray alloc] initWithCapacity:kNumberOfSlices];
 
         for (int ix = 0; ix < kNumberOfSlices; ix++) {
             [self.arr_xyoffsets addObject:[Point3D Zeroes]];
@@ -237,14 +237,12 @@ static const long kMaxNumberOfSamplesForRegression = 2000;
             [self.arr_xyCounters addObject:@(0)];
             [self.arr_xzCounters addObject:@(0)];
             [self.arr_zyCounters addObject:@(0)];
-        }
-        
-        for (int ix = 0; ix < kNumberOfAxisParts; ix++) {
+            
             [xArr addObject:[[MutableArrayWithCounter alloc] initWithCapacity:kMaxNumberOfSamplesForRegression]];
             [yArr addObject:[[MutableArrayWithCounter alloc] initWithCapacity:kMaxNumberOfSamplesForRegression]];
             [zArr addObject:[[MutableArrayWithCounter alloc] initWithCapacity:kMaxNumberOfSamplesForRegression]];
         }
-        
+      
         self.arr_X_RegressionValues = xArr;
         self.arr_Y_RegressionValues = yArr;
         self.arr_Z_RegressionValues = zArr;
@@ -268,6 +266,19 @@ static const long kMaxNumberOfSamplesForRegression = 2000;
     double choice = fabs(optB) > fabs(optA) ? optB : optA;
     
     return choice;
+}
+
+// Find in which segment based on the resoltion, is the given unit vector component found
+- (int) segmentIndexInUnityAxis : (double) unitVectorComponent {
+    static const double kResolutionSegmentSize = 1.0 / kSliceResolution; // 1/2
+    
+    for (int i = -(kSliceResolution - 1), ix = 0; i < (kSliceResolution + 1); i++, ix++) {
+        if (unitVectorComponent < (kResolutionSegmentSize * i)) {
+            return ix;
+        }
+    }
+    
+    return 1; // ERROR
 }
 
 - (int) sliceIndexInPlane : (double) theta {
@@ -310,6 +321,7 @@ static const long kMaxNumberOfSamplesForRegression = 2000;
     
     return q_found;
 }
+
 
 /** Calculate three separate avg for newPoint values
  * @param newPoint: NormGVec - UnitVec in the same direction (x,y,z)
@@ -496,16 +508,16 @@ static const long kMaxNumberOfSamplesForRegression = 2000;
         [self updateAvgSpaceSelect:GRPlaneZX newPoint:Unit_minus_actual quadrantSliceIx:zxSliceIxInPlane];
         [self updateAvgSpaceSelect:GRPlaneYZ newPoint:Unit_minus_actual quadrantSliceIx:yzSliceIxInPlane];
         
-        [self addSampleForRegressionX:x y:y z:z ux:oneX uy:oneY uz:oneZ planeSelect:GRPlaneXY slice:xySliceIxInPlane];
-        [self addSampleForRegressionX:x y:y z:z ux:oneX uy:oneY uz:oneZ planeSelect:GRPlaneYZ slice:yzSliceIxInPlane];
-        [self addSampleForRegressionX:x y:y z:z ux:oneX uy:oneY uz:oneZ planeSelect:GRPlaneZX slice:zxSliceIxInPlane];
+        [self addSampleForRegressionX:x y:y z:z ux:oneX uy:oneY uz:oneZ planeSelect:GRPlaneXY];
+        [self addSampleForRegressionX:x y:y z:z ux:oneX uy:oneY uz:oneZ planeSelect:GRPlaneYZ];
+        [self addSampleForRegressionX:x y:y z:z ux:oneX uy:oneY uz:oneZ planeSelect:GRPlaneZX];
         
         // Update Threshoulds
         if (_thresholdRefreshSamplesCounter > kNumberOfSamplesToRefreshThreshold) {
             _thresholdRefreshSamplesCounter = 0;
 //            [self refreshThresholds];
             
-            [self calculateRegressionInPlane:GRPlaneXY sliceIndex:xySliceIxInPlane useVerticalAxis:YES];
+            [self calculateRegressionInPlane:GRPlaneXY referenceUnitVec:oneY useVerticalAxis:YES];
 //            [self calculateRegressionInPlane:GRPlaneXY sliceIndex:xySliceIxInPlane useVerticalAxis:NO];
         }
         _thresholdRefreshSamplesCounter++;
@@ -640,32 +652,33 @@ static const long kMaxNumberOfSamplesForRegression = 2000;
     NSLog(@"Bias = %.4f, Gain = %.4f", bias, gain);
 }
 
-/*
- Planes can be XY, YZ, ZX
- secondAxis ? Y : X   // secondAxis ? X : Z  // secondAxis ? Z : Y
- 
- Assuming resolution = 2
- Assuming Plane XY
- Quadrant index |   X   |   Y
- ===============|=======|=========
-    0           |   3   |   2
-    1           |   2   |   3
-    2           |   1   |   3
-    3           |   0   |   2
-    4           |   0   |   1
-    5           |   1   |   0
-    6           |   2   |   0
-    7           |   3   |   1
- 
- 
- */
+///*
+// Planes can be XY, YZ, ZX
+// secondAxis ? Y : X   // secondAxis ? X : Z  // secondAxis ? Z : Y
+//
+// OBSOLETE - USING ONE ARRAY FOR EACH POSITION OF THE DEVICE
+// Assuming resolution = 2
+// Assuming Plane XY
+// Quadrant index |   X   |   Y
+// ===============|=======|=========
+//    0           |   3   |   2
+//    1           |   2   |   3
+//    2           |   1   |   3
+//    3           |   0   |   2
+//    4           |   0   |   1
+//    5           |   1   |   0
+//    6           |   2   |   0
+//    7           |   3   |   1
+// 
+// 
+// */
 - (MutableArrayWithCounter*) dotsArrayForPlane : (GRPlaneSelect) plane
-                                   quadrantIx : (int) quadrantIx
-                                getSecondAxis : (BOOL) secondAxis {
-
+                              absolutSegmentIx : (int) absoluteSegmentIx
+                                 getSecondAxis : (BOOL) secondAxis {
+//
     MutableArrayWithCounter *arrOut;
     NSArray *axisArr;
-    
+
     switch (plane) {
         case GRPlaneXY:
             axisArr = secondAxis ? self.arr_Y_RegressionValues : self.arr_X_RegressionValues;
@@ -675,20 +688,29 @@ static const long kMaxNumberOfSamplesForRegression = 2000;
             break;
         case GRPlaneZX:
             axisArr = secondAxis ? self.arr_X_RegressionValues : self.arr_Z_RegressionValues;
+            break;
         default:
             axisArr = nil;
             break;
     }
-    
-    
-    if (axisArr != nil) {
-        int quadrantIxFix = secondAxis ? kSliceResolution : 0;
-        int arrIx = (quadrantIx + quadrantIxFix) % kNumberOfAxisParts;
-        
-        
-        arrOut = axisArr[arrIx];
+//
+//    
+//    if (axisArr != nil) {
+//        int quadrantIxFix = secondAxis ? kSliceResolution : 0;
+//        int arrIx = (quadrantIx + quadrantIxFix) % kNumberOfAxisParts;
+//        
+//        
+//        arrOut = axisArr[arrIx];
+//    }
+
+    int segmentIx;
+    if (secondAxis) {
+        segmentIx = absoluteSegmentIx + 2 * kSliceResolution;
+    } else {
+        segmentIx = absoluteSegmentIx;
     }
     
+    arrOut = axisArr[segmentIx];
     return arrOut;
 }
 
@@ -697,11 +719,14 @@ static const long kMaxNumberOfSamplesForRegression = 2000;
                       unit1 : (double) unit1
                     gValue2 : (double) gValue2
                       unit2 : (double) unit2
-                 planeSelect : (GRPlaneSelect) plane
-                  quadrantIx : (int) quadrantIx {
+                 planeSelect : (GRPlaneSelect) plane {
     
-    MutableArrayWithCounter *dotsArr1 = [self dotsArrayForPlane:plane quadrantIx:quadrantIx getSecondAxis:NO];
-    MutableArrayWithCounter *dotsArr2 = [self dotsArrayForPlane:plane quadrantIx:quadrantIx getSecondAxis:YES];
+    int segment1Ix = [self segmentIndexInUnityAxis:unit1];
+    int segment2Ix = [self segmentIndexInUnityAxis:unit2];
+    
+    MutableArrayWithCounter *dotsArr1 = [self dotsArrayForPlane:plane absolutSegmentIx:segment1Ix getSecondAxis:NO];
+    MutableArrayWithCounter *dotsArr2 = [self dotsArrayForPlane:plane absolutSegmentIx:segment2Ix getSecondAxis:YES];
+    
     [dotsArr1 addObjectToRing:[Point2D point2dWithX:unit1 andY:gValue1]];
     [dotsArr2 addObjectToRing:[Point2D point2dWithX:unit2 andY:gValue2]];
 }
@@ -712,8 +737,7 @@ static const long kMaxNumberOfSamplesForRegression = 2000;
                               ux : (double) ux
                               uy : (double) uy
                               uz : (double) uz
-                     planeSelect : (GRPlaneSelect) plane
-                           slice : (int) sliceIx {
+                     planeSelect : (GRPlaneSelect) plane {
     
     switch (plane) {
         case GRPlaneXY:
@@ -721,18 +745,7 @@ static const long kMaxNumberOfSamplesForRegression = 2000;
                                 unit1:ux
                               gValue2:y
                                 unit2:uy
-                          planeSelect:plane
-                           quadrantIx:sliceIx];
-            
-//            ix1 = [self.arr_X_RegressionIndices[sliceIx] longValue];
-//            ix2 = [self.arr_Y_RegressionIndices[secondIx] longValue];
-//            
-//            self.arr_X_RegressionValues[ix1] = [Point2D point2dWithX:ux andY:x];
-//            self.arr_Y_RegressionValues[ix2] = [Point2D point2dWithX:uy andY:y];
-//            
-//            self.arr_X_RegressionIndices[sliceIx] = @(ix1 ==  kMaxNumberOfSamplesForRegression ? 0 : ix1 + 1);
-//            self.arr_Y_RegressionIndices[secondIx] = @(ix2 ==  kMaxNumberOfSamplesForRegression ? 0 : ix2 + 1);
-
+                          planeSelect:plane];
             
             break;
         case GRPlaneYZ:
@@ -740,18 +753,7 @@ static const long kMaxNumberOfSamplesForRegression = 2000;
                                 unit1:uy
                               gValue2:z
                                 unit2:uz
-                          planeSelect:plane
-                           quadrantIx:sliceIx];
-
-//            ix1 = [self.arr_Y_RegressionIndices[sliceIx] longValue];
-//            ix2 = [self.arr_Z_RegressionIndices[secondIx] longValue];
-//            
-//            self.arr_Y_RegressionValues[ix1] = [Point2D point2dWithX:uy andY:y];
-//            self.arr_Z_RegressionValues[ix2] = [Point2D point2dWithX:uz andY:z];
-//            
-//            self.arr_Y_RegressionIndices[sliceIx] = @(ix1 ==  kMaxNumberOfSamplesForRegression ? 0 : ix1 + 1);
-//            self.arr_Z_RegressionIndices[secondIx] = @(ix2 ==  kMaxNumberOfSamplesForRegression ? 0 : ix2 + 1);
-            
+                          planeSelect:plane];
             
             break;
         case GRPlaneZX:
@@ -759,17 +761,7 @@ static const long kMaxNumberOfSamplesForRegression = 2000;
                                 unit1:uz
                               gValue2:x
                                 unit2:ux
-                          planeSelect:plane
-                           quadrantIx:sliceIx];
-
-//            ix1 = [self.arr_Z_RegressionIndices[sliceIx] longValue];
-//            ix2 = [self.arr_X_RegressionIndices[secondIx] longValue];
-//            
-//            self.arr_Z_RegressionValues[ix1] = [Point2D point2dWithX:uz andY:z];
-//            self.arr_X_RegressionValues[ix2] = [Point2D point2dWithX:ux andY:x];
-//            
-//            self.arr_Z_RegressionIndices[sliceIx] = @(ix1 ==  kMaxNumberOfSamplesForRegression ? 0 : ix1 + 1);
-//            self.arr_X_RegressionIndices[secondIx] = @(ix2 ==  kMaxNumberOfSamplesForRegression ? 0 : ix2 + 1);
+                          planeSelect:plane];
             
             
             break;
@@ -779,10 +771,12 @@ static const long kMaxNumberOfSamplesForRegression = 2000;
 }
 
 - (void) calculateRegressionInPlane : (GRPlaneSelect) plane
-                         sliceIndex : (int) sliceIx
+                   referenceUnitVec : (double) referenceUnitVector
                     useVerticalAxis : (BOOL) verticalAxis {
+    
+    int absoluteSegmentInAxis = [self segmentIndexInUnityAxis:referenceUnitVector];
     MutableArrayWithCounter *mutableArrayMngr = [self dotsArrayForPlane:plane
-                                                            quadrantIx:sliceIx
+                                                            absolutSegmentIx:absoluteSegmentInAxis
                                                          getSecondAxis:verticalAxis];
 
     double bias, gain;
@@ -790,7 +784,16 @@ static const long kMaxNumberOfSamplesForRegression = 2000;
                                      biasOut:&bias
                                      gainOut:&gain];
     
-    NSLog(@"Slice: %d. N = %lu. Bias = %.4f, gain = %.4f", sliceIx, (unsigned long)mutableArrayMngr.numberOfRealValues, bias, gain);
+    NSLog(@"Segm: %d. N = %lu. Bias = %.4f, gain = %.4f", (verticalAxis ? absoluteSegmentInAxis + kSliceResolution*2 : absoluteSegmentInAxis), (unsigned long)mutableArrayMngr.numberOfRealValues, bias, gain);
+//    if (fabs(bias) > 0.2) {
+//        NSMutableString *printStr = [NSMutableString stringWithFormat:@"bias = %.4f\n", bias];
+//        
+//        for (int ix = 0; ix < mutableArrayMngr.numberOfRealValues; ix++) {
+//            Point2D *currPoint = [mutableArrayMngr objectAtIx:ix];
+//            [printStr appendFormat:@" x=%.4f, ux=%.4f \n", currPoint.y, currPoint.x];
+//        }
+//        NSLog(@"%@", printStr);
+//    }
 }
 
 - (void) linearRegressionOfUserAcceleration : (MutableArrayWithCounter*) pointsArray biasOut : (double*) outBias gainOut : (double*) outGain
