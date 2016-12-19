@@ -36,16 +36,16 @@ typedef NS_ENUM(NSInteger, GRWorkMode) {
 #pragma mark Constants
 
 // Minimal number of samples to start using the average of samples
-static const int kMinNumberOfSamples = 300; // after 3 seconds at 25 samples per second.
+// static const int kMinNumberOfSamples = 300; // after 3 seconds at 25 samples per second.
 
 // number of areas to split each of the 4 quadrants
 // 2: 0<|x|<0.5 or 0.5<|x|<1
 static const int kSliceResolution = 2;
 static const int kNumberOfQuadrantsInSpace = 4;
-static const int kNumberOfSpacePlanes = 3;
+//static const int kNumberOfSpacePlanes = 3;
 static const int kNumberOfSlices = kSliceResolution * kNumberOfQuadrantsInSpace;
 //static const int kNumberOfAxisParts = 2 * kSliceResolution;
-static const int kNumberOfSectors = kNumberOfSpacePlanes * kNumberOfSlices;
+//static const int kNumberOfSectors = kNumberOfSpacePlanes * kNumberOfSlices;
 //static const int kNumberOfSectorsForEachAxis = 2 * kNumberOfSlices;
 
 /*
@@ -189,13 +189,6 @@ static const long kMaxNumberOfSamplesForRegression = 3000;
 
 @interface GRAccelerometerOffsetDetector ()
 
-@property (nonatomic, strong) NSMutableArray *arr_xyoffsets;
-@property (nonatomic, strong) NSMutableArray *arr_xyCounters;
-@property (nonatomic, strong) NSMutableArray *arr_xzoffsets;
-@property (nonatomic, strong) NSMutableArray *arr_xzCounters;
-@property (nonatomic, strong) NSMutableArray *arr_zyoffsets;
-@property (nonatomic, strong) NSMutableArray *arr_zyCounters;
-
 @property (nonatomic, strong) NSArray *arr_X_RegressionValues;
 @property (nonatomic, strong) NSArray *arr_Y_RegressionValues;
 @property (nonatomic, strong) NSArray *arr_Z_RegressionValues;
@@ -219,24 +212,11 @@ static const long kMaxNumberOfSamplesForRegression = 3000;
 
 - (instancetype) init:(int)flagToMakeItPrivate {
     if (self = [super init]) {
-        self.arr_xyoffsets = [NSMutableArray arrayWithCapacity:kNumberOfSlices];
-        self.arr_xyCounters = [NSMutableArray arrayWithCapacity:kNumberOfSlices];
-        self.arr_xzoffsets = [NSMutableArray arrayWithCapacity:kNumberOfSlices];
-        self.arr_xzCounters = [NSMutableArray arrayWithCapacity:kNumberOfSlices];
-        self.arr_zyoffsets = [NSMutableArray arrayWithCapacity:kNumberOfSlices];
-        self.arr_zyCounters = [NSMutableArray arrayWithCapacity:kNumberOfSlices];
         NSMutableArray *xArr = [[NSMutableArray alloc] initWithCapacity:kNumberOfSlices];
         NSMutableArray *yArr = [[NSMutableArray alloc] initWithCapacity:kNumberOfSlices];
         NSMutableArray *zArr = [[NSMutableArray alloc] initWithCapacity:kNumberOfSlices];
 
         for (int ix = 0; ix < kNumberOfSlices; ix++) {
-            [self.arr_xyoffsets addObject:[Point3D Zeroes]];
-            [self.arr_xzoffsets addObject:[Point3D Zeroes]];
-            [self.arr_zyoffsets addObject:[Point3D Zeroes]];
-            
-            [self.arr_xyCounters addObject:@(0)];
-            [self.arr_xzCounters addObject:@(0)];
-            [self.arr_zyCounters addObject:@(0)];
             
             [xArr addObject:[[MutableArrayWithCounter alloc] initWithCapacity:kMaxNumberOfSamplesForRegression]];
             [yArr addObject:[[MutableArrayWithCounter alloc] initWithCapacity:kMaxNumberOfSamplesForRegression]];
@@ -254,20 +234,6 @@ static const long kMaxNumberOfSamplesForRegression = 3000;
 
 #pragma mark Common Calculations
 
-// Build as averages for each segment of each quadrant separately.
-// Use infinite avg (the comment out) and not sliding windows.
-- (double) avgCalcNewValue:(double) newVal currentAvg: (double) currAvg numberOfsamples: (long) currSampleCounter {
-    double result = (currAvg * currSampleCounter + newVal) / (currSampleCounter + 1);
-    
-    return result;
-}
-
-- (double) choseBestOptionA : (double) optA optionB : (double) optB {
-    double choice = fabs(optB) > fabs(optA) ? optB : optA;
-    
-    return choice;
-}
-
 // Find in which segment based on the resoltion, is the given unit vector component found
 - (int) segmentIndexInUnityAxis : (double) unitVectorComponent {
     static const double kResolutionSegmentSize = 1.0 / kSliceResolution; // 1/2
@@ -281,151 +247,22 @@ static const long kMaxNumberOfSamplesForRegression = 3000;
     return 1; // ERROR
 }
 
-- (int) sliceIndexInPlane : (double) theta {
-    int q_found = -1;
-    static double sliceSize = M_PI_2 / kSliceResolution;
-    double fixedTheta = theta;
-    int q_0;
-    double startQComparator, currSliceTopLimit;
-    
-    if (theta < 0) {
-        fixedTheta = 2 * M_PI + theta;
-        q_0 = 2 * kSliceResolution;
-        startQComparator = sliceSize + M_PI;
-    } else {
-        fixedTheta = theta;
-        startQComparator = sliceSize;
-        q_0 = 0;
-    }
-    
-    currSliceTopLimit = startQComparator;
-    
-    // searching half space
-    int kNumberOfQuadrantsToScan = 2;
-    int kNumberOfSlicesToCheck = kNumberOfQuadrantsToScan * kSliceResolution;
-    for (int q_ix = 1; q_ix < kNumberOfSlicesToCheck; q_ix++) {
-        if (fixedTheta < currSliceTopLimit) {
-            q_found = q_ix - 1;
-            break;
-        }
-        
-        currSliceTopLimit += sliceSize;
-    }
-    
-    if (q_found == -1) {
-        // Not found, lat slice of last quadrant
-        q_found = 2*kSliceResolution - 1;
-    }
-    
-    q_found += q_0; // Fix if it's second half of space.
-    
-    return q_found;
-}
+/**
+ Use this function is used in one of two modes:
 
+ - Log a new meassurement for calculations
 
-/** Calculate three separate avg for newPoint values
- * @param newPoint: NormGVec - UnitVec in the same direction (x,y,z)
- * @param plane: Select which plane (xy, yz, zx) you are currently working on.
- * @param quadrantSliceIx: Which section of the spce (resolution * 4 sections. 4 as there are 4 quadrants (++, -+, -- , +-)
- *
+ - Calculate a fixed sample based
+
+ @param action Select GRWorkMode insert new sample or get a fix of an input based on history data
+ @param x Measured Ax
+ @param y Measured Ay
+ @param z Measured Az
+ @return A point with fixed Ax, Ay, Az
  */
-- (Point3D*) updateAvgSpaceSelect : (GRPlaneSelect) plane newPoint : (Point3D*) p3d quadrantSliceIx : (int) currSliceInQuadrant {
-    NSMutableArray *currOffsetArr = nil;
-    NSMutableArray *currCountersArr = nil;
-    Point3D *newVal = [Point3D Zeroes];
-    long currCounter;
-    
-    switch (plane) {
-        case GRPlaneXY:
-        {
-            currOffsetArr = self.arr_xyoffsets;
-            currCountersArr = self.arr_xyCounters;
-            Point3D *currVal = currOffsetArr[currSliceInQuadrant];
-            currCounter = [currCountersArr[currSliceInQuadrant] longValue];
-            
-            newVal.x = [self avgCalcNewValue:p3d.x currentAvg:currVal.x numberOfsamples:currCounter];
-            newVal.y = [self avgCalcNewValue:p3d.y currentAvg:currVal.y numberOfsamples:currCounter];
-        }
-            
-            break;
-        case GRPlaneZX:
-        {
-            currOffsetArr = self.arr_xzoffsets;
-            currCountersArr = self.arr_xzCounters;
-            Point3D *currVal = currOffsetArr[currSliceInQuadrant];
-            currCounter = [currCountersArr[currSliceInQuadrant] longValue];
-            
-            newVal.x = [self avgCalcNewValue:p3d.x currentAvg:currVal.x numberOfsamples:currCounter];
-            newVal.z = [self avgCalcNewValue:p3d.z currentAvg:currVal.z numberOfsamples:currCounter];
-        }
-            
-            break;
-        case GRPlaneYZ:
-        {
-            currOffsetArr = self.arr_zyoffsets;
-            currCountersArr = self.arr_zyCounters;
-            Point3D *currVal = currOffsetArr[currSliceInQuadrant];
-            currCounter = [currCountersArr[currSliceInQuadrant] longValue];
-            
-            newVal.y = [self avgCalcNewValue:p3d.y currentAvg:currVal.y numberOfsamples:currCounter];
-            newVal.z = [self avgCalcNewValue:p3d.z currentAvg:currVal.z numberOfsamples:currCounter];
-        }
-            
-            break;
-        default:
-            NSLog(@"WRONG SPACE");
-            return newVal;
-            break;
-    }
-    
-    currCountersArr[currSliceInQuadrant] = @(currCounter + 1);
-    currOffsetArr[currSliceInQuadrant] = newVal;
-    
-    return newVal;
-}
-
-- (long) readAvgSpaceSelect : (GRPlaneSelect) plane outputPoint : (Point3D*) outPoint quadrantSliceIx : (int) currSliceInQuadrant {
-    NSMutableArray *currOffsetArr = nil;
-    NSMutableArray *currCountersArr = nil;
-    Point3D *currVal;
-    long currCounter;
-    
-    switch (plane) {
-        case GRPlaneXY:
-            currOffsetArr = self.arr_xyoffsets;
-            currCountersArr = self.arr_xyCounters;
-            
-            break;
-        case GRPlaneZX:
-            currOffsetArr = self.arr_xzoffsets;
-            currCountersArr = self.arr_xzCounters;
-            
-            break;
-        case GRPlaneYZ:
-            currOffsetArr = self.arr_zyoffsets;
-            currCountersArr = self.arr_zyCounters;
-            
-            break;
-        default:
-            NSLog(@"WRONG SPACE");
-            return -0xBAD;
-            break;
-    }
-    
-    currVal = currOffsetArr[currSliceInQuadrant];
-    currCounter = [currCountersArr[currSliceInQuadrant] longValue];
-    
-    [outPoint updateWithPoint:currVal];
-    
-    return currCounter;
-}
-
-
 - (Point3D*) action:(GRWorkMode)action WithX:(double)x y:(double)y z:(double)z {
     double gVecModule = sqrt(pow(x, 2)+pow(y, 2)+pow(z, 2));
     Point3D* result = nil;
-
-//    [self TEST_REGRESSION];
 
     
     //
@@ -443,8 +280,6 @@ static const long kMaxNumberOfSamplesForRegression = 3000;
     
     double gVec_xy = sqrt(pow(x, 2)+pow(y, 2));
     double theta_xy = atan2(y,x);
-    double theta_zx = atan2(x,z);
-    double theta_yz = atan2(z,y);
     double sin_phi = gVec_xy / gVecModule; // Always +
     double phi = asin(sin_phi);     // Always +
     
@@ -471,6 +306,8 @@ static const long kMaxNumberOfSamplesForRegression = 3000;
     double oneZ = cos(phi);
     
     
+    // DEBUG PRINTOUTS FOR JUMPS DETECTION
+    /*
     if (oneX * x < 0) {
         NSLog(@"Different SIGN!!! X");
     }
@@ -489,12 +326,8 @@ static const long kMaxNumberOfSamplesForRegression = 3000;
     if (fabs(oneZ - z) > fabs(gVecModule - 1)) {
         NSLog(@"DIFFERENT SIZE!!! z");
     }
-    
+    */
 
-    // Find G quadrant for each plane
-    int xySliceIxInPlane = [self sliceIndexInPlane:theta_xy];
-    int zxSliceIxInPlane = [self sliceIndexInPlane:theta_zx];
-    int yzSliceIxInPlane = [self sliceIndexInPlane:theta_yz];
 
     if (action == GRWorkModeInserValue) {
         // Calculate the offset for each component from the ideal unit vector
@@ -502,12 +335,8 @@ static const long kMaxNumberOfSamplesForRegression = 3000;
         Unit_minus_actual.x = oneX - x;
         Unit_minus_actual.y = oneY - y;
         Unit_minus_actual.z = oneZ - z;
-
-        // Add a sample to each average according to
-        [self updateAvgSpaceSelect:GRPlaneXY newPoint:Unit_minus_actual quadrantSliceIx:xySliceIxInPlane];
-        [self updateAvgSpaceSelect:GRPlaneZX newPoint:Unit_minus_actual quadrantSliceIx:zxSliceIxInPlane];
-        [self updateAvgSpaceSelect:GRPlaneYZ newPoint:Unit_minus_actual quadrantSliceIx:yzSliceIxInPlane];
         
+        // Save samples to regression vectors
         [self addSampleForRegressionX:x y:y z:z ux:oneX uy:oneY uz:oneZ planeSelect:GRPlaneXY];
         [self addSampleForRegressionX:x y:y z:z ux:oneX uy:oneY uz:oneZ planeSelect:GRPlaneYZ];
         [self addSampleForRegressionX:x y:y z:z ux:oneX uy:oneY uz:oneZ planeSelect:GRPlaneZX];
@@ -516,42 +345,20 @@ static const long kMaxNumberOfSamplesForRegression = 3000;
         if (_thresholdRefreshSamplesCounter > kNumberOfSamplesToRefreshThreshold) {
             _thresholdRefreshSamplesCounter = 0;
 //            [self refreshThresholds];
-            
-            [self calculateRegressionInPlane:GRPlaneXY referenceUnitVec:oneY useVerticalAxis:YES];
-//            [self calculateRegressionInPlane:GRPlaneXY sliceIndex:xySliceIxInPlane useVerticalAxis:NO];
+            // Calculate regression for X accelerator based on plane XY
+            NSLog(@"X on XY");
+            [self calculateRegressionInPlane:GRPlaneXY referenceUnitVec:oneX useVerticalAxis:NO];
+            // Calculate regression for X accelerator based on plan ZX
         }
         _thresholdRefreshSamplesCounter++;
         
     } else {
-        double offsetX = 0.0, offsetY = 0.0, offsetZ = 0.0;
-        Point3D *currVal = [Point3D Zeroes];
-        long currCounter = [self readAvgSpaceSelect:GRPlaneXY outputPoint:currVal quadrantSliceIx:xySliceIxInPlane];
-        
-        if (currCounter > kMinNumberOfSamples) {
-            offsetX = currVal.x;
-            offsetY = currVal.y;
-        }
-
-        currVal = [Point3D Zeroes];
-        currCounter = [self readAvgSpaceSelect:GRPlaneYZ outputPoint:currVal quadrantSliceIx:yzSliceIxInPlane];
-        
-        if (currCounter > kMinNumberOfSamples) {
-            offsetZ = currVal.z;
-            offsetY = [self choseBestOptionA:currVal.y optionB:offsetY];
-        }
-        
-        currVal = [Point3D Zeroes];
-        currCounter = [self readAvgSpaceSelect:GRPlaneZX outputPoint:currVal quadrantSliceIx:zxSliceIxInPlane];
-        
-        if (currCounter > kMinNumberOfSamples) {
-            offsetZ = [self choseBestOptionA:offsetZ optionB:currVal.z];
-            offsetX = [self choseBestOptionA:currVal.x optionB:offsetX];
-        }
         
         result = [[Point3D alloc] init];
-        result.x = x - offsetX;
-        result.y = y - offsetY;
-        result.z = z - offsetZ;
+        // Fix it using linear regression coefficients
+        result.x = x;
+        result.y = y;
+        result.z = z;
     }
     
     return result;
@@ -564,41 +371,17 @@ static const long kMaxNumberOfSamplesForRegression = 3000;
     double negativeOffsetsAvg = 0;
     
     for (int sliceIx = 0; sliceIx < kNumberOfSlices; sliceIx++) {
-        double xFix = -100.0, yFix = -100.0, zFix = -100.0;
+        //        double xFix = -100.0, yFix = -100.0, zFix = -100.0;
         
         // XY
-        long currCounter = [self.arr_xyCounters[sliceIx] longValue];
-        
-        if (currCounter > kMinNumberOfSamples) {
-            Point3D *xyPoint = self.arr_xyoffsets[sliceIx];
-            xFix = xyPoint.x;
-            yFix = xyPoint.y;
-        }
         
         
         // YZ
-        currCounter = [self.arr_zyCounters[sliceIx] longValue];
-        
-        if (currCounter > kMinNumberOfSamples) {
-            Point3D *zyPoint = self.arr_zyoffsets[sliceIx];
-            yFix = [self choseBestOptionA:yFix optionB:zyPoint.y];
-            zFix = zyPoint.z;
-        }
         
         
         // XZ
-        currCounter = [self.arr_xzCounters[sliceIx] longValue];
         
-        if (currCounter > kMinNumberOfSamples) {
-            Point3D *xzPoint = self.arr_xzoffsets[sliceIx];
-            xFix = [self choseBestOptionA:xFix optionB:xzPoint.x];
-            zFix = [self choseBestOptionA:zFix optionB:xzPoint.z];
-        }
-        
-        NSLog(@"xfix = %.4f, yfix = %.4f, zfix = %.4f", xFix, yFix, zFix);
-        [self updatePosAvg:&possitiveOffsetsAvg andNegPos:&negativeOffsetsAvg withFix:xFix currUp:currentUpperThrsDelta currLow:currentLowerThrsDelta];
-        [self updatePosAvg:&possitiveOffsetsAvg andNegPos:&negativeOffsetsAvg withFix:yFix currUp:currentUpperThrsDelta currLow:currentLowerThrsDelta];
-        [self updatePosAvg:&possitiveOffsetsAvg andNegPos:&negativeOffsetsAvg withFix:zFix currUp:currentUpperThrsDelta currLow:currentLowerThrsDelta];
+        //        NSLog(@"xfix = %.4f, yfix = %.4f, zfix = %.4f", xFix, yFix, zFix);
     }
     
     
@@ -614,22 +397,6 @@ static const long kMaxNumberOfSamplesForRegression = 3000;
 //    NSLog(@"Lower delta after: %.4f", currentLowerThrsDelta);
     
 //    NSLog(@"Updated Up Thr: %.3f --- Low Thr: %.3f", _highGThreshold, _lowGThreshold);
-}
-
-- (void) updatePosAvg : (double*) possitiveAvg andNegPos : (double*) negAvg withFix : (double) fix currUp : (double) currentUpperThrsDelta currLow : (double) currentLowerThrsDelta {
-    static double defaultLowValue = (kLowGThresFirstValue - 1.0) / kNumberOfSectors;
-    static double defaultHighValue = (kHighGThresFirstValue - 1.0) / kNumberOfSectors;
-    
-    if (fix < -90) { // Detect there's no value. Conserve current value
-        *possitiveAvg += defaultHighValue;
-        *negAvg += defaultLowValue;
-    } else if (fix > 0) {
-        *possitiveAvg += fix / kNumberOfSectors;
-//        *negAvg += defaultLowValue;
-    } else if (fix < 0) {
-//        *possitiveAvg += defaultHighValue;
-        *negAvg += fix / kNumberOfSectors;
-    }
 }
 
 
@@ -656,21 +423,6 @@ static const long kMaxNumberOfSamplesForRegression = 3000;
 // Planes can be XY, YZ, ZX
 // secondAxis ? Y : X   // secondAxis ? X : Z  // secondAxis ? Z : Y
 //
-// OBSOLETE - USING ONE ARRAY FOR EACH POSITION OF THE DEVICE
-// Assuming resolution = 2
-// Assuming Plane XY
-// Quadrant index |   X   |   Y
-// ===============|=======|=========
-//    0           |   3   |   2
-//    1           |   2   |   3
-//    2           |   1   |   3
-//    3           |   0   |   2
-//    4           |   0   |   1
-//    5           |   1   |   0
-//    6           |   2   |   0
-//    7           |   3   |   1
-// 
-// 
 // */
 - (MutableArrayWithCounter*) dotsArrayForPlane : (GRPlaneSelect) plane
                               absolutSegmentIx : (int) absoluteSegmentIx
@@ -770,6 +522,18 @@ static const long kMaxNumberOfSamplesForRegression = 3000;
     }
 }
 
+/** calculateRegressionInPlane
+ @brief
+ Calculates the Regression of an array of (x,y) pairs. Needs a plane (xy, yz, zx) and a axis selector to chose acceleromeeter.
+
+ A unity vector componet on the desired axis is required to select the range of the accelerometer to calculate the regression.
+
+ Ax Through XY, Ux, FALSE is the same as ZX, Ux, TRUE. Both address the same collection of values (assuming using the same Ux)
+ 
+ @param plane GRPlaneSelect <XY | YZ | ZX> Select a pair of axis
+ @param referenceUnitVector Use it to decide the range of the accelerometer (for resolution = 2 there are four ranges: [-1,-0.5], [-0.5,0], [0,0.5], [0.5,1]
+ @param verticalAxis Chose which accelerometer in the selected plane. If TRUE: XY => Y, YZ => Z, ZX => X
+ */
 - (void) calculateRegressionInPlane : (GRPlaneSelect) plane
                    referenceUnitVec : (double) referenceUnitVector
                     useVerticalAxis : (BOOL) verticalAxis {
@@ -784,16 +548,21 @@ static const long kMaxNumberOfSamplesForRegression = 3000;
                                      biasOut:&bias
                                      gainOut:&gain];
     
+    // Data print outs for debugging
     NSLog(@"Segm: %d. N = %lu. Bias = %.4f, gain = %.4f", (verticalAxis ? absoluteSegmentInAxis + kSliceResolution*2 : absoluteSegmentInAxis), (unsigned long)mutableArrayMngr.numberOfRealValues, bias, gain);
-//    if (fabs(bias) > 0.2) {
-//        NSMutableString *printStr = [NSMutableString stringWithFormat:@"bias = %.4f\n", bias];
-//        
-//        for (int ix = 0; ix < mutableArrayMngr.numberOfRealValues; ix++) {
-//            Point2D *currPoint = [mutableArrayMngr objectAtIx:ix];
-//            [printStr appendFormat:@" x=%.4f, ux=%.4f \n", currPoint.y, currPoint.x];
-//        }
-//        NSLog(@"%@", printStr);
-//    }
+    /*
+    if (fabs(bias) > 0.2) {
+        NSMutableString *printStr = [NSMutableString stringWithFormat:@"bias = %.4f\n", bias];
+        
+        for (int ix = 0; ix < mutableArrayMngr.numberOfRealValues; ix++) {
+            Point2D *currPoint = [mutableArrayMngr objectAtIx:ix];
+            [printStr appendFormat:@" (x,ux) = %.4f,%.4f \n", currPoint.y, currPoint.x];
+        }
+        NSLog(@"%@", printStr);
+        NSLog(@"----");
+    }
+     */
+    
 }
 
 - (void) linearRegressionOfUserAcceleration : (MutableArrayWithCounter*) pointsArray biasOut : (double*) outBias gainOut : (double*) outGain
