@@ -571,8 +571,8 @@ static const long kMaxNumberOfSamplesForRegression = 3000;
     double ax, ay, sX = 0, sY = 0, ssX = 0, ssY = 0, ssXY = 0, avgX, avgY;
     
     if (n ==0) {
-        outBias = -1234;
-        outGain = -1234;
+        *outBias = -1234;
+        *outGain = -1234;
         return;
     }
     
