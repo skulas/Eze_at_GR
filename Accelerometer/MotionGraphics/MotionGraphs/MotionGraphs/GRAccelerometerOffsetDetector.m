@@ -72,7 +72,7 @@ static const long kMaxNumberOfSamplesForRegression = 3000;
 @property (nonatomic, assign, readonly) NSUInteger numberOfRealValues;
 @property (nonatomic, assign, readonly) NSUInteger currentWriteIndex;
 @property (nonatomic, assign, readonly) NSUInteger currentReadIndex;
-@property (nonatomic, assign, readonly) NSUInteger kMaxNumberOfItems;
+@property (nonatomic, assign, readonly) NSUInteger numberOfItems;
 @property (nonatomic, strong) NSMutableArray *dotsArray;
 
 - (instancetype) initWithCapacity : (NSUInteger) capacity;
@@ -91,7 +91,7 @@ static const long kMaxNumberOfSamplesForRegression = 3000;
         _numberOfRealValues = 0;
         _currentWriteIndex = 0;
         _currentReadIndex = 0;
-        _kMaxNumberOfItems = capacity;
+        _numberOfItems = capacity;
     }
     
     return self;
@@ -109,7 +109,14 @@ static const long kMaxNumberOfSamplesForRegression = 3000;
     
     // Update indices for next value
     _currentReadIndex = _currentWriteIndex;
-    _currentWriteIndex = _currentWriteIndex == self.kMaxNumberOfItems ? 0 : _currentWriteIndex+1;
+    _currentWriteIndex = _currentWriteIndex == self.numberOfItems ? 0 : _currentWriteIndex+1;
+}
+
+- (void) populateArrayWithSameObject : (id) obj {
+    [self.dotsArray removeAllObjects];
+    for (int ix = 0; ix < self.numberOfItems; ix++) {
+        [self addObject:obj];
+    }
 }
 
 - (id) objectAtIx : (NSUInteger) ix {
@@ -215,11 +222,20 @@ static const long kMaxNumberOfSamplesForRegression = 3000;
         NSMutableArray *xArr = [[NSMutableArray alloc] initWithCapacity:kNumberOfSlices];
         NSMutableArray *yArr = [[NSMutableArray alloc] initWithCapacity:kNumberOfSlices];
         NSMutableArray *zArr = [[NSMutableArray alloc] initWithCapacity:kNumberOfSlices];
-
+        MutableArrayWithCounter *arrayWithCounter;
+        NSNull *sameNull = [NSNull null]; // use same object for all the arrays.
+        
         for (int ix = 0; ix < kNumberOfSlices; ix++) {
+            arrayWithCounter = [[MutableArrayWithCounter alloc] initWithCapacity:kMaxNumberOfSamplesForRegression];
+            [arrayWithCounter populateArrayWithSameObject:sameNull];
+            [xArr addObject:arrayWithCounter];
             
-            [xArr addObject:[[MutableArrayWithCounter alloc] initWithCapacity:kMaxNumberOfSamplesForRegression]];
+            arrayWithCounter = [[MutableArrayWithCounter alloc] initWithCapacity:kMaxNumberOfSamplesForRegression];
+            [arrayWithCounter populateArrayWithSameObject:sameNull];
             [yArr addObject:[[MutableArrayWithCounter alloc] initWithCapacity:kMaxNumberOfSamplesForRegression]];
+            
+            arrayWithCounter = [[MutableArrayWithCounter alloc] initWithCapacity:kMaxNumberOfSamplesForRegression];
+            [arrayWithCounter populateArrayWithSameObject:sameNull];
             [zArr addObject:[[MutableArrayWithCounter alloc] initWithCapacity:kMaxNumberOfSamplesForRegression]];
         }
       
@@ -415,7 +431,7 @@ static const long kMaxNumberOfSamplesForRegression = 3000;
     }
     
     double bias, gain;
-    [self linearRegressionOfUserAcceleration:points biasOut:&bias gainOut:&gain];//] planeSelect:GRPlaneXY]; // Expected B = 1.05 A = 1
+    [self linearRegressionOfAcceleratorSamples:points biasOut:&bias gainOut:&gain];//] planeSelect:GRPlaneXY]; // Expected B = 1.05 A = 1
     NSLog(@"Bias = %.4f, Gain = %.4f", bias, gain);
 }
 
@@ -544,7 +560,7 @@ static const long kMaxNumberOfSamplesForRegression = 3000;
                                                          getSecondAxis:verticalAxis];
 
     double bias, gain;
-    [self linearRegressionOfUserAcceleration:mutableArrayMngr
+    [self linearRegressionOfAcceleratorSamples:mutableArrayMngr
                                      biasOut:&bias
                                      gainOut:&gain];
     
@@ -565,7 +581,7 @@ static const long kMaxNumberOfSamplesForRegression = 3000;
     
 }
 
-- (void) linearRegressionOfUserAcceleration : (MutableArrayWithCounter*) pointsArray biasOut : (double*) outBias gainOut : (double*) outGain
+- (void) linearRegressionOfAcceleratorSamples : (MutableArrayWithCounter*) pointsArray biasOut : (double*) outBias gainOut : (double*) outGain
 {
     NSUInteger n = pointsArray.numberOfRealValues;
     double ax, ay, sX = 0, sY = 0, ssX = 0, ssY = 0, ssXY = 0, avgX, avgY;

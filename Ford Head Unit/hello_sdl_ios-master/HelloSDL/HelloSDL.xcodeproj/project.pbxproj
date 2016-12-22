@@ -171,7 +171,7 @@
 				TargetAttributes = {
 					7C2D5ADA1BC30F4C002FE9CE = {
 						CreatedOnToolsVersion = 7.0.1;
-						DevelopmentTeam = HP3L42VX7R;
+						DevelopmentTeam = 7U7ZPN9LGP;
 					};
 				};
 			};
@@ -377,6 +377,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DEVELOPMENT_TEAM = 7U7ZPN9LGP;
 				INFOPLIST_FILE = HelloSDL/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				PRODUCT_BUNDLE_IDENTIFIER = com.ford.HelloSDL;
@@ -390,6 +391,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DEVELOPMENT_TEAM = 7U7ZPN9LGP;
 				INFOPLIST_FILE = HelloSDL/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				PRODUCT_BUNDLE_IDENTIFIER = com.ford.HelloSDL;
